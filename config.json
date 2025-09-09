@@ -1,0 +1,15 @@
+{
+  "name": "Nombre Apellido",
+  "subtitle": "Descripción corta / rol",
+  "avatar": "avatar.jpg",
+  "contactVcf": "contact.vcf",
+  "socials": {
+    "instagram": "",
+    "x": "",
+    "tiktok": "",
+    "youtube": "",
+    "linkedin": "aaa",
+    "facebook": "https://www.facebook.com/tu.usuario",
+    "website": ""
+  }
+}
