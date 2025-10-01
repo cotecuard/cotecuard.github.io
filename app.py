@@ -7,14 +7,19 @@ from itsdangerous import URLSafeSerializer, BadSignature
 from dotenv import load_dotenv
 load_dotenv()  # carga variables de .env si existe
 import ssl, smtplib
-from werkzeug.utils import secure_filename
+from werkzeug.utils import secure_filename, safe_join
 import time
+import unicodedata
 
 
 APP_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(APP_DIR, "data.db")
 SITES_DIR = os.path.join(APP_DIR, "sites")
 UPLOADS_DIR = os.path.join(APP_DIR, "static", "uploads")
+
+SITE_INDEX_DIR = os.path.join(APP_DIR, "index")       # carpeta con index/index.html
+PERFILES_DIR   = os.path.join(APP_DIR, "Perfiles")    # carpeta con perfiles
+
 
 os.makedirs(SITES_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
@@ -336,7 +341,83 @@ def theme_vars_to_css(vars_dict: dict) -> str:
     kv = [f"{k}:{v}" for k,v in vars_dict.items()]
     return ":root{" + "; ".join(kv) + "; }"
 
-@app.route("/<slug>", methods=["GET"])
+@app.route("/")
+def landing_static():
+    return send_file(os.path.join(SITE_INDEX_DIR, "index.html"))
+
+############################
+
+# Prefijos reservados que NO deben capturar como "perfil"
+RESERVED_PREFIXES = {
+    "static", "sites", "setup", "edit", "_dev", "_debug",
+    "terminos", "privacidad", "c"  # "c" la reservamos para tus rutas dinámicas
+}
+
+def _normalize_path(p: str) -> str:
+    # Normaliza acentos a NFC (Linux suele usar NFC)
+    return unicodedata.normalize("NFC", p)
+
+def _is_reserved(first_segment: str) -> bool:
+    return first_segment.lower() in RESERVED_PREFIXES
+
+@app.route("/<perfil>/")
+def perfil_folder(perfil):
+    perfil = _normalize_path(perfil)
+    if _is_reserved(perfil):
+        abort(404)
+    # /<perfil>/ → intenta Perfiles/<perfil>/<perfil>.html o .../index.html
+    base = os.path.join(PERFILES_DIR, perfil)
+    if not os.path.isdir(base):
+        abort(404)
+    cand1 = os.path.join(base, f"{os.path.basename(base)}.html")
+    if os.path.exists(cand1):
+        return send_file(cand1)
+    cand2 = os.path.join(base, "index.html")
+    if os.path.exists(cand2):
+        return send_file(cand2)
+    abort(404)
+
+@app.route("/<perfil>/<path:resto>")
+def perfil_file(perfil, resto):
+    perfil = _normalize_path(perfil)
+    if _is_reserved(perfil):
+        abort(404)
+    # Sirve cualquier archivo dentro de Perfiles/<perfil>/...
+    safe_rel = _normalize_path(resto)
+    base_dir = os.path.join(PERFILES_DIR, perfil)
+    target = safe_join(base_dir, safe_rel)
+    if not target:
+        abort(404)
+
+    # Archivo exacto
+    if os.path.exists(target) and os.path.commonpath([os.path.abspath(target), base_dir]) == os.path.abspath(base_dir):
+        return send_file(target)
+
+    # Si pidieron sin extensión, intenta .html
+    target_html = safe_join(base_dir, safe_rel + ".html")
+    if target_html and os.path.exists(target_html):
+        return send_file(target_html)
+
+    abort(404)
+
+
+############################
+
+@app.route("/index/<path:rel>")
+def serve_index_assets(rel):
+    from werkzeug.utils import safe_join
+    rel = os.path.normpath(rel).lstrip(os.sep)
+    target = safe_join(SITE_INDEX_DIR, rel)
+    if not target or not os.path.exists(target):
+        abort(404)
+    return send_file(target)
+
+
+
+
+####### RUTAS DINÁMICAS DE TARJETAS #######
+
+@app.route("/c/<slug>", methods=["GET"])
 def public_or_form(slug):
     # Solo permitimos slugs cuya carpeta YA exista
     if not os.path.isdir(site_path(slug)):
