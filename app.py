@@ -1,0 +1,751 @@
+import os, json, sqlite3, secrets, string, smtplib, mimetypes
+from datetime import timedelta
+from email.message import EmailMessage
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, abort, jsonify, send_file
+import mimetypes
+from itsdangerous import URLSafeSerializer, BadSignature
+from dotenv import load_dotenv
+load_dotenv()  # carga variables de .env si existe
+import ssl, smtplib
+from werkzeug.utils import secure_filename
+import time
+
+
+APP_DIR = os.path.abspath(os.path.dirname(__file__))
+DB_PATH = os.path.join(APP_DIR, "data.db")
+SITES_DIR = os.path.join(APP_DIR, "sites")
+UPLOADS_DIR = os.path.join(APP_DIR, "static", "uploads")
+
+os.makedirs(SITES_DIR, exist_ok=True)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+def get_db():
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+def init_db():
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS cards (
+      slug TEXT PRIMARY KEY,
+      email TEXT,
+      config_json TEXT,
+      verified INTEGER DEFAULT 0,
+      verify_code TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    con.commit()
+    con.close()
+
+init_db()
+
+app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+SIGNER = URLSafeSerializer(app.config["SECRET_KEY"], salt="edit-link")
+
+# ---------- utilidades ----------
+
+def send_email_with_retry(to_email, subject, body_html, body_text=None, retries=2, backoff=1.2):
+    """
+    Envía email con N reintentos (retries = intentos extra). Lanza excepción si falla al final.
+    """
+    attempt = 0
+    last_err = None
+    while attempt <= retries:
+        try:
+            send_email(to_email, subject, body_html, body_text)
+            return  # éxito
+        except Exception as e:
+            last_err = e
+            attempt += 1
+            if attempt > retries:
+                break
+            time.sleep(backoff ** attempt)  # backoff suave
+    raise last_err
+
+def is_under_uploads(abs_path: str) -> bool:
+    try:
+        return os.path.commonpath([os.path.abspath(abs_path), os.path.abspath(UPLOADS_DIR)]) == os.path.abspath(UPLOADS_DIR)
+    except Exception:
+        return False
+
+def delete_upload_if_local(rel_or_abs_path: str):
+    """
+    Borra el archivo si:
+      - existe,
+      - es un path local bajo /static/uploads,
+      - y no es vacío.
+    Acepta rutas relativas tipo '/static/uploads/abc.png' o absolutas.
+    """
+    if not rel_or_abs_path:
+        return
+    # normaliza a absoluta
+    if rel_or_abs_path.startswith("/"):
+        # asume ruta relativa al root del sitio
+        abs_path = os.path.join(APP_DIR, rel_or_abs_path.lstrip("/"))
+    else:
+        abs_path = os.path.abspath(rel_or_abs_path)
+
+    if os.path.exists(abs_path) and is_under_uploads(abs_path):
+        try:
+            os.remove(abs_path)
+        except Exception as e:
+            app.logger.warning("No se pudo borrar %s: %s", abs_path, e)
+
+
+def random_code(n=6):
+    return ''.join(secrets.choice(string.digits) for _ in range(n))
+
+def site_path(slug):
+    # Ya NO crea carpeta automáticamente.
+    return os.path.join(SITES_DIR, slug)
+
+def site_exists(slug) -> bool:
+    return os.path.isdir(site_path(slug))
+
+def save_file(storage, fallback_filename):
+    """
+    Guarda archivo subido en /static/uploads y devuelve ruta relativa.
+    Si no se sube nada, devuelve fallback_filename.
+    """ 
+    if not storage or not getattr(storage, "filename", ""):
+        return fallback_filename
+
+    # Si el navegador manda filename vacío, tratamos como "no hubo subida"
+    filename = storage.filename or ""
+    filename = filename.strip()
+    if not filename:
+        return fallback_filename
+
+    # nombre seguro + extensión
+    safe = secure_filename(filename)
+    ext = os.path.splitext(safe)[1].lower()
+
+    fname = f"{secrets.token_hex(8)}{ext}"
+    path = os.path.join(UPLOADS_DIR, fname)
+
+    # guarda
+    storage.save(path)
+
+    return f"/static/uploads/{fname}"
+def send_email(to_email, subject, body_html, body_text=None):
+    host = os.environ.get("SMTP_HOST")
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    user = os.environ.get("SMTP_USER")
+    pwd  = os.environ.get("SMTP_PASS")
+    from_addr = os.environ.get("FROM_EMAIL", user)
+
+    if not (host and port and from_addr and to_email):
+        raise RuntimeError("SMTP mal configurado. Revisa SMTP_HOST, SMTP_PORT, SMTP_USER/FROM_EMAIL y el destinatario.")
+
+    msg = EmailMessage()
+    msg["From"] = from_addr
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    if body_text:
+        msg.set_content(body_text)
+    else:
+        msg.set_content("Ver versión HTML del correo.")
+    msg.add_alternative(body_html, subtype="html")
+
+    try:
+        if port == 465:
+            # SSL directo
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(host, port, context=context, timeout=20) as s:
+                if user and pwd:
+                    s.login(user, pwd)
+                s.send_message(msg)
+        else:
+            # STARTTLS (587 típico)
+            context = ssl.create_default_context()
+            with smtplib.SMTP(host, port, timeout=20) as s:
+                s.ehlo()
+                s.starttls(context=context)
+                s.ehlo()
+                if user and pwd:
+                    s.login(user, pwd)
+                s.send_message(msg)
+        app.logger.info("Correo enviado a %s con asunto '%s'", to_email, subject)
+    except Exception as e:
+        app.logger.error("Error enviando correo a %s: %s", to_email, e, exc_info=True)
+        # return opcional: propaga o maneja el error según tu endpoint
+        raise
+
+def write_file(path, content, binary=False):
+    mode = "wb" if binary else "w"
+    with open(path, mode, encoding=None if binary else "utf-8") as f:
+        f.write(content)
+
+def generate_vcf(cfg):
+    name = cfg.get("name","").strip()
+    email = cfg.get("email","").strip()
+    phones = cfg.get("phones", {}) or {}
+
+    # Intento simple de dividir nombre "Nombre Apellidos"
+    parts = name.split()
+    last = parts[-1] if len(parts) > 1 else ""
+    first = " ".join(parts[:-1]) if len(parts) > 1 else (parts[0] if parts else "")
+
+    lines = [
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+        f"N:{last};{first};;;",
+        f"FN:{name}",
+    ]
+    if email:
+        lines.append(f"EMAIL;TYPE=INTERNET:{email}")
+    if phones.get("cell"):
+        lines.append(f"TEL;TYPE=CELL:{phones['cell']}")
+    if phones.get("work"):
+        lines.append(f"TEL;TYPE=WORK:{phones['work']}")
+    if phones.get("home"):
+        lines.append(f"TEL;TYPE=HOME:{phones['home']}")
+    lines.append("END:VCARD")
+
+    # vCard es quisquilloso con CRLF
+    return "\r\n".join(lines) + "\r\n"
+
+
+# ---------- rutas principales ----------
+THEMES = {
+    # ===== EXISTENTES =====
+    "default (dark glow)": {
+        "--bg-solid": "#0f1115", "--bg-grad1": "#1b2640", "--bg-grad2": "#1a2e2f", "--bg-grad3": "#0b0e13",
+        "--card": "#141823", "--text": "#e8ecf1", "--muted": "#9aa4b2",
+        "--primary": "#62d0ff", "--primary-rgb": "98,208,255",
+        "--ring": "0 0 0 3px rgba(98,208,255,.25)", "--radius": "22px",
+        "--link-bg": "#101521", "--border": "rgba(255,255,255,.06)",
+        "--button1": "#28c0ff", "--button2": "#10a3df", "--button-text": "#001018"
+    },
+    "ocean": {
+        "--bg-solid": "#0b1220", "--bg-grad1": "#112548", "--bg-grad2": "#0e2a33", "--bg-grad3": "#0a1422",
+        "--card": "#0f1a2b", "--text": "#e6f3ff", "--muted": "#9bb3cc",
+        "--primary": "#3ac1ff", "--primary-rgb": "58,193,255",
+        "--ring": "0 0 0 3px rgba(58,193,255,.25)", "--radius": "20px",
+        "--link-bg": "#0e1a2a", "--border": "rgba(225,240,255,.08)",
+        "--button1": "#34b5ff", "--button2": "#1f8edb", "--button-text": "#03101a"
+    },
+    "sunset": {
+        "--bg-solid": "#1a0f14", "--bg-grad1": "#3a1622", "--bg-grad2": "#2b141a", "--bg-grad3": "#150a0e",
+        "--card": "#2a141a", "--text": "#ffece6", "--muted": "#f2b5a5",
+        "--primary": "#ff7a59", "--primary-rgb": "255,122,89",
+        "--ring": "0 0 0 3px rgba(255,122,89,.25)", "--radius": "22px",
+        "--link-bg": "#2b1316", "--border": "rgba(255,236,230,.10)",
+        "--button1": "#ff9966", "--button2": "#ff7a59", "--button-text": "#230b07"
+    },
+    "forest": {
+        "--bg-solid": "#0d1411", "--bg-grad1": "#143227", "--bg-grad2": "#10261e", "--bg-grad3": "#0a120f",
+        "--card": "#122019", "--text": "#e9f5ef", "--muted": "#a2c3b4",
+        "--primary": "#51d19a", "--primary-rgb": "81,209,154",
+        "--ring": "0 0 0 3px rgba(81,209,154,.25)", "--radius": "20px",
+        "--link-bg": "#0f1f18", "--border": "rgba(233,245,239,.08)",
+        "--button1": "#58dfa6", "--button2": "#2dbf8a", "--button-text": "#02140e"
+    },
+    "mono": {
+        "--bg-solid": "#0e0e0f", "--bg-grad1": "#1a1a1c", "--bg-grad2": "#141417", "--bg-grad3": "#0d0d0f",
+        "--card": "#151517", "--text": "#f1f1f1", "--muted": "#a9a9b0",
+        "--primary": "#ffffff", "--primary-rgb": "255,255,255",
+        "--ring": "0 0 0 3px rgba(255,255,255,.18)", "--radius": "18px",
+        "--link-bg": "#151517", "--border": "rgba(255,255,255,.10)",
+        "--button1": "#f1f1f1", "--button2": "#cfcfd4", "--button-text": "#0a0a0a"
+    },
+
+    # ===== NUEVOS =====
+    # gris claro → "silver"
+    "silver": {
+        "--bg-solid": "#f0f1f3", "--bg-grad1": "#ffffff", "--bg-grad2": "#e7e9ee", "--bg-grad3": "#f5f6f8",
+        "--card": "#ffffff", "--text": "#202225", "--muted": "#6c6f76",
+        "--primary": "#6b7a90", "--primary-rgb": "107,122,144",
+        "--ring": "0 0 0 3px rgba(107,122,144,.22)", "--radius": "20px",
+        "--link-bg": "#f4f6f9", "--border": "rgba(0,0,0,.08)",
+        "--button1": "#e9edf2", "--button2": "#d9dee6", "--button-text": "#1a1c20"
+    },
+    # dorado renombrado → "gold"
+    "gold": {
+        "--bg-solid": "#1a1308", "--bg-grad1": "#3b2a10", "--bg-grad2": "#2c1f0c", "--bg-grad3": "#120c05",
+        "--card": "#2b1d0a", "--text": "#fff8e6", "--muted": "#e6d3a9",
+        "--primary": "#ffcc33", "--primary-rgb": "255,204,51",
+        "--ring": "0 0 0 3px rgba(255,204,51,.25)", "--radius": "22px",
+        "--link-bg": "#2c1f0c", "--border": "rgba(255,204,51,.15)",
+        "--button1": "#ffd966", "--button2": "#ffcc33", "--button-text": "#201600"
+    },
+    "lavender": {
+        "--bg-solid": "#1b1530", "--bg-grad1": "#2a1f54", "--bg-grad2": "#221b43", "--bg-grad3": "#170f2c",
+        "--card": "#251b44", "--text": "#efeaff", "--muted": "#b9b1e3",
+        "--primary": "#b693ff", "--primary-rgb": "182,147,255",
+        "--ring": "0 0 0 3px rgba(182,147,255,.28)", "--radius": "22px",
+        "--link-bg": "#231a3f", "--border": "rgba(239,234,255,.12)",
+        "--button1": "#c6a8ff", "--button2": "#a98cff", "--button-text": "#130d26"
+    },
+    "rose": {
+        "--bg-solid": "#2a0f1b", "--bg-grad1": "#4a1830", "--bg-grad2": "#371427", "--bg-grad3": "#1c0a14",
+        "--card": "#3a1525", "--text": "#ffe7f0", "--muted": "#f3b6c9",
+        "--primary": "#ff6b9a", "--primary-rgb": "255,107,154",
+        "--ring": "0 0 0 3px rgba(255,107,154,.28)", "--radius": "22px",
+        "--link-bg": "#321222", "--border": "rgba(255,231,240,.12)",
+        "--button1": "#ff9fbc", "--button2": "#ff6b9a", "--button-text": "#280913"
+    },
+    "mint": {
+        "--bg-solid": "#0b1f1b", "--bg-grad1": "#124438", "--bg-grad2": "#0e372f", "--bg-grad3": "#09231e",
+        "--card": "#0f2f28", "--text": "#e9fff8", "--muted": "#a9e2d2",
+        "--primary": "#66e3c0", "--primary-rgb": "102,227,192",
+        "--ring": "0 0 0 3px rgba(102,227,192,.26)", "--radius": "20px",
+        "--link-bg": "#0e2b25", "--border": "rgba(233,255,248,.10)",
+        "--button1": "#7cf0cd", "--button2": "#44d5b0", "--button-text": "#031a14"
+    },
+    "teal": {
+        "--bg-solid": "#081e22", "--bg-grad1": "#0e3940", "--bg-grad2": "#0c2e35", "--bg-grad3": "#061b1f",
+        "--card": "#0d2a30", "--text": "#e7fbff", "--muted": "#9fd0d8",
+        "--primary": "#31c6d4", "--primary-rgb": "49,198,212",
+        "--ring": "0 0 0 3px rgba(49,198,212,.26)", "--radius": "20px",
+        "--link-bg": "#0c252b", "--border": "rgba(231,251,255,.10)",
+        "--button1": "#49d3df", "--button2": "#23b7c6", "--button-text": "#041316"
+    },
+    "indigo": {
+        "--bg-solid": "#0e1026", "--bg-grad1": "#1b1e4d", "--bg-grad2": "#15183b", "--bg-grad3": "#0b0d1e",
+        "--card": "#14183a", "--text": "#e9ecff", "--muted": "#aab0e8",
+        "--primary": "#6677ff", "--primary-rgb": "102,119,255",
+        "--ring": "0 0 0 3px rgba(102,119,255,.25)", "--radius": "22px",
+        "--link-bg": "#121636", "--border": "rgba(233,236,255,.10)",
+        "--button1": "#7f8cff", "--button2": "#5a6bff", "--button-text": "#080a1a"
+    },
+    "coral": {
+        "--bg-solid": "#1c1210", "--bg-grad1": "#3a211b", "--bg-grad2": "#2b1a16", "--bg-grad3": "#120a08",
+        "--card": "#2c1a16", "--text": "#fff0eb", "--muted": "#f0b9ab",
+        "--primary": "#ff8a65", "--primary-rgb": "255,138,101",
+        "--ring": "0 0 0 3px rgba(255,138,101,.25)", "--radius": "20px",
+        "--link-bg": "#261713", "--border": "rgba(255,240,235,.10)",
+        "--button1": "#ffad91", "--button2": "#ff8a65", "--button-text": "#2a120d"
+    },
+    "cyberpunk": {
+        "--bg-solid": "#0b0014", "--bg-grad1": "#30003f", "--bg-grad2": "#001b33", "--bg-grad3": "#070010",
+        "--card": "#1b0a29", "--text": "#f4eaff", "--muted": "#cfa9ff",
+        "--primary": "#ff2bd1", "--primary-rgb": "255,43,209",
+        "--ring": "0 0 0 3px rgba(255,43,209,.28)", "--radius": "22px",
+        "--link-bg": "#170824", "--border": "rgba(244,234,255,.12)",
+        "--button1": "#ff73e4", "--button2": "#ff2bd1", "--button-text": "#19031e"
+    }
+}
+
+def theme_vars_to_css(vars_dict: dict) -> str:
+    kv = [f"{k}:{v}" for k,v in vars_dict.items()]
+    return ":root{" + "; ".join(kv) + "; }"
+
+@app.route("/<slug>", methods=["GET"])
+def public_or_form(slug):
+    # Solo permitimos slugs cuya carpeta YA exista
+    if not os.path.isdir(site_path(slug)):
+        # Si NO existe la carpeta -> 404
+        abort(404)
+
+    # Revisamos DB
+    con = get_db()
+    cur = con.cursor()
+    row = cur.execute("SELECT config_json FROM cards WHERE slug=?", (slug,)).fetchone()
+    con.close()
+
+    if row:
+        # Hay sitio ya configurado: renderiza
+        cfg = json.loads(row["config_json"])
+        title_str = cfg.get("name") or "Tarjeta"
+        theme_name = (cfg.get("theme") or "indigo").lower()
+        theme_css = theme_vars_to_css(THEMES.get(theme_name, THEMES["indigo"]))
+        cfg_json = json.dumps(cfg, ensure_ascii=False, indent=2)
+        return render_template("site.html", title_str=title_str, theme_css=theme_css, cfg_json=cfg_json, slug=slug)
+
+    # No hay fila en DB pero SÍ carpeta -> formulario vacío
+    return render_template("form.html", slug=slug, cfg=None, mode="create")
+
+
+@app.route("/setup/<slug>", methods=["POST"])
+def setup(slug):
+    """
+    Recibe el formulario y guarda config.
+    RESTRICCIÓN: Solo permite si la carpeta de <slug> YA existe.
+    Además, el título = name; carpeta/VCF fijos (ignoramos esos campos del form).
+    """
+    # Requiere carpeta pre-provisionada
+    if not site_exists(slug):
+        abort(403)  # o 404 según prefieras
+
+    # campos base
+    name = request.form.get("name","").strip()
+    subtitle = request.form.get("subtitle","").strip()
+    email = request.form.get("email","").strip().lower()
+    email2 = request.form.get("email_confirm","").strip().lower()
+    if not email or email != email2:
+        return "Emails no coinciden", 400
+
+    # <<< NUEVO: aceptación de términos (solo crear)
+    accepted = (request.form.get("accept_terms", "") or "").lower() in ("1", "true", "on", "yes")
+    if not accepted:
+        return "Debes aceptar los Términos y Condiciones para continuar.", 400
+    # >>> FIN NUEVO
+
+    # archivos
+    avatar_rel = save_file(request.files.get("avatar"), "avatar.jpg")
+    company_logo_rel = save_file(request.files.get("companyLogo"), "")
+
+    # tema
+    theme = request.form.get("theme","indigo")
+
+    # sociales
+    socials = {
+        "instagram": request.form.get("socials.instagram","").strip(),
+        "x": request.form.get("socials.x","").strip(),
+        "tiktok": request.form.get("socials.tiktok","").strip(),
+        "youtube": request.form.get("socials.youtube","").strip(),
+        "linkedin": request.form.get("socials.linkedin","").strip(),
+        "facebook": request.form.get("socials.facebook","").strip(),
+        "website": request.form.get("socials.website","").strip(),
+        "whatsapp": request.form.get("socials.whatsapp","").strip(),
+    }
+
+    phones = {
+        "cell": request.form.get("phones.cell","").strip(),
+        "work": request.form.get("phones.work","").strip(),
+        "home": request.form.get("phones.home","").strip(),
+    }
+
+    # Fijamos título y VCF (ignoramos lo que venga del form)
+    FIXED_VCF = "contacto.vcf"
+
+    cfg = {
+        "name": name,
+        "title": name,  # título = nombre
+        "subtitle": subtitle,
+        "avatar": avatar_rel,
+        "companyLogo": company_logo_rel,
+        "email": email,
+        "phones": phones,
+        "socials": socials,
+        "contactVcf": FIXED_VCF,
+        # "outputFolderName":  <-- removido, ya no se usa
+        "theme": theme
+    }
+
+    # Si ya existía config previa, podemos intentar borrar archivos previos si se reemplazaron
+    prev_cfg_row = None
+    con_prev = get_db()
+    prev_cfg_row = con_prev.execute("SELECT config_json FROM cards WHERE slug=?", (slug,)).fetchone()
+    con_prev.close()
+
+    if prev_cfg_row:
+        prev_cfg = json.loads(prev_cfg_row["config_json"])
+        # si avatar cambió y el nuevo está en /uploads, borra el viejo
+        if avatar_rel and avatar_rel != prev_cfg.get("avatar"):
+            delete_upload_if_local(prev_cfg.get("avatar", ""))
+        # si logo cambió
+        if company_logo_rel and company_logo_rel != prev_cfg.get("companyLogo"):
+            delete_upload_if_local(prev_cfg.get("companyLogo", ""))
+
+
+    # guardar en DB
+    verify_code = random_code(6)
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("""
+      INSERT INTO cards (slug, email, config_json, verified, verify_code)
+      VALUES (?, ?, ?, 0, ?)
+      ON CONFLICT(slug) DO UPDATE SET
+        email=excluded.email,
+        config_json=excluded.config_json,
+        verified=0,
+        verify_code=excluded.verify_code,
+        updated_at=CURRENT_TIMESTAMP
+    """, (slug, email, json.dumps(cfg, ensure_ascii=False), verify_code))
+    con.commit()
+    con.close()
+
+    # persistir artefactos del "sitio" (carpeta ya existe)
+    spath = site_path(slug)
+    write_file(os.path.join(spath, "config.json"), json.dumps(cfg, indent=2, ensure_ascii=False))
+    vcf_text = generate_vcf(cfg)
+    write_file(os.path.join(spath, FIXED_VCF), vcf_text)
+
+    # enviar email con link de edición + código
+    token = SIGNER.dumps({"slug": slug, "email": email})
+    edit_url = url_for("edit_form", slug=slug, token=token, _external=True)
+
+    if app.debug:
+        print("\n=== DEBUG: EMAIL SIMULADO ===")
+        print("Edit URL:", edit_url)
+        print("Código de verificación:", verify_code)
+        print("=============================\n")
+
+    html = f"""
+    <h2>Tu link de edición</h2>
+    <p>Para editar tu tarjeta, abre este enlace:</p>
+    <p><a href="{edit_url}">{edit_url}</a></p>
+    <p>Te pediremos el siguiente código de verificación:</p>
+    <h3 style="letter-spacing:3px;">{verify_code}</h3>
+    """
+    try:
+        send_email(email, "Link de edición y código de verificación", html, f"Edita aquí: {edit_url}\nCódigo: {verify_code}")
+    except Exception as e:
+        print("WARN email:", e)
+
+    return redirect(url_for("public_or_form", slug=slug))
+
+@app.route("/edit/<slug>", methods=["GET", "POST"])
+@app.route("/edit/<slug>", methods=["GET", "POST"])
+def edit_form(slug):
+    """
+    GET con ?token=... muestra formulario prellenado si token es válido.
+    POST verifica código y, si es correcto, aplica cambios.
+    Restricciones:
+    - Requiere que la carpeta del slug exista.
+    - Título SIEMPRE = nombre (no editable).
+    - Ignoramos outputFolderName/contactVcf del form (valores fijos).
+    """
+    if not site_exists(slug):
+        abort(404)
+
+    token = request.args.get("token") or request.form.get("token")
+    if not token:
+        abort(403)
+    try:
+        data = SIGNER.loads(token)
+    except BadSignature:
+        abort(403)
+
+    con = get_db()
+    row = con.execute("SELECT email, config_json, verify_code FROM cards WHERE slug=?", (slug,)).fetchone()
+    con.close()
+    if not row:
+        abort(404)
+
+    cfg = json.loads(row["config_json"])
+
+    if request.method == "GET":
+        return render_template("form.html", slug=slug, cfg=cfg, mode="edit", token=token)
+
+    code = request.form.get("verify_code","").strip()
+    if not code or code != row["verify_code"]:
+        return render_template(
+            "form.html",
+            slug=slug,
+            cfg=cfg,
+            mode="edit",
+            token=token,
+            error="Código de verificación inválido. Revisa e inténtalo de nuevo."
+        ), 400
+
+    def keep_or(name, default=""):
+        v = request.form.get(name, None)
+        return v.strip() if v is not None else (cfg.get(name) if default=="" else cfg.get(name, default))
+
+    # Campos editables
+    cfg["name"] = keep_or("name")
+    cfg["title"] = cfg["name"]  # forzado: título = nombre
+    cfg["subtitle"] = keep_or("subtitle")
+
+    # ===================== ARCHIVOS (avatar y logo) =====================
+    # Guarda los previos
+    old_avatar = cfg.get("avatar", "")
+    old_logo   = cfg.get("companyLogo", "")
+
+    # flags de eliminación (cuando se hace click en la X del template)
+    avatar_remove = request.form.get("avatar_remove", "0") == "1"
+    logo_remove   = request.form.get("companyLogo_remove", "0") == "1"
+
+    # archivos subidos (si hay). Si no hay subida, save_file retorna el fallback.
+    maybe_new_avatar = save_file(request.files.get("avatar"), old_avatar)
+    maybe_new_logo   = save_file(request.files.get("companyLogo"), old_logo)
+
+    # LÓGICA:
+    # 1) si hay archivo nuevo distinto → borrar el viejo y quedarnos con el nuevo
+    # 2) si no hay nuevo pero marcaron remove → borrar el actual y dejar campo vacío
+    # 3) si no hay nuevo y no marcaron remove → conservar el anterior
+
+    # Avatar
+    if maybe_new_avatar != old_avatar:  # se subió uno nuevo
+        delete_upload_if_local(old_avatar)
+        cfg["avatar"] = maybe_new_avatar
+    else:
+        if avatar_remove and old_avatar:
+            delete_upload_if_local(old_avatar)
+            cfg["avatar"] = ""  # limpio
+
+    # Company Logo
+    if maybe_new_logo != old_logo:  # se subió uno nuevo
+        delete_upload_if_local(old_logo)
+        cfg["companyLogo"] = maybe_new_logo
+    else:
+        if logo_remove and old_logo:
+            delete_upload_if_local(old_logo)
+            cfg["companyLogo"] = ""  # limpio
+    # ===================================================================
+
+    # tema
+    cfg["theme"] = keep_or("theme", "indigo")
+
+    # sociales
+    cfg.setdefault("socials", {})
+    for k in ["instagram","x","tiktok","youtube","linkedin","facebook","website","whatsapp"]:
+        field = f"socials.{k}"
+        val = request.form.get(field, None)
+        if val is not None:
+            cfg["socials"][k] = val.strip()
+
+    # teléfonos
+    cfg.setdefault("phones", {})
+    for k in ["cell","work","home"]:
+        field = f"phones.{k}"
+        val = request.form.get(field, None)
+        if val is not None:
+            cfg["phones"][k] = val.strip()
+
+    # email sigue editable
+    cfg["email"] = keep_or("email", cfg.get("email",""))
+
+    # VCF fijo (ignoramos lo que venga del form)
+    FIXED_VCF = cfg.get("contactVcf") or "contacto.vcf"
+    cfg["contactVcf"] = FIXED_VCF
+    # outputFolderName eliminado
+
+    # guardar
+    con = get_db()
+    con.execute("UPDATE cards SET config_json=?, updated_at=CURRENT_TIMESTAMP WHERE slug=?", (json.dumps(cfg, ensure_ascii=False), slug))
+    con.commit()
+    con.close()
+
+    spath = site_path(slug)
+    write_file(os.path.join(spath, "config.json"), json.dumps(cfg, indent=2, ensure_ascii=False))
+    write_file(os.path.join(spath, FIXED_VCF), generate_vcf(cfg))
+
+    # ===================== PERSISTENCIA CONDICIONADA AL EMAIL =====================
+    # Prepara NUEVO código y token (aún NO persistimos nada)
+    new_code = random_code(6)
+    new_token = SIGNER.dumps({"slug": slug, "email": cfg["email"]})
+    edit_url = url_for("edit_form", slug=slug, token=new_token, _external=True)
+
+    if app.debug:
+        print("\n=== DEBUG: EMAIL SIMULADO ===")
+        print("Edit URL:", edit_url)
+        print("Código de verificación (nuevo):", new_code)
+        print("=============================\n")
+
+    # Email de notificación
+    html = f"""
+    <h2>Tu link de edición</h2>
+    <p>Puedes editar tu tarjeta en este enlace:</p>
+    <p><a href="{edit_url}">{edit_url}</a></p>
+    <p>Nuevo código de verificación:</p>
+    <h3 style="letter-spacing:3px;">{new_code}</h3>
+    """
+
+    # 1) INTENTAR ENVIAR PRIMERO (con reintentos). Si falla => NO hay cambios.
+    try:
+        send_email_with_retry(
+            cfg["email"],
+            "Nuevo link y código de verificación",
+            html,
+            f"Edita aquí: {edit_url}\nCódigo: {new_code}",
+            retries=2,  # puedes subir a 3-4 si quieres
+            backoff=1.4
+        )
+    except Exception as e:
+        app.logger.error("No se pudo enviar el email; NO se guardan cambios: %s", e, exc_info=True)
+        # Mostrar aviso y NO guardar nada (config ni verify_code)
+        return render_template(
+            "form.html",
+            slug=slug,
+            cfg=cfg,          # seguimos mostrando lo que tenía antes
+            mode="edit",
+            token=token,      # token previo sigue válido
+            error="No se guardaron los cambios porque no pudimos enviar el correo de verificación. Intenta de nuevo más tarde."
+        ), 502
+
+    # 2) Si el email se envió, AHORA sí persistimos cambios (DB primero; luego archivos)
+    try:
+        con = get_db()
+        cur = con.cursor()
+        cur.execute(
+            "UPDATE cards SET config_json=?, verify_code=?, updated_at=CURRENT_TIMESTAMP WHERE slug=?",
+            (json.dumps(cfg, ensure_ascii=False), new_code, slug)
+        )
+        con.commit()
+        con.close()
+    except Exception as e:
+        app.logger.error("Error guardando en DB tras enviar email (esto es raro): %s", e, exc_info=True)
+        # En una app grande, aquí podrías enviar otro email explicando el fallo.
+        return render_template(
+            "form.html",
+            slug=slug,
+            cfg=cfg,
+            mode="edit",
+            token=token,
+            error="El correo se envió, pero ocurrió un error guardando los cambios. No se aplicaron. Intenta de nuevo."
+        ), 500
+
+    # 3) Escribe artefactos del sitio (si aquí falla, ya está confirmada la DB; logueamos y seguimos)
+    try:
+        spath = site_path(slug)
+        write_file(os.path.join(spath, "config.json"), json.dumps(cfg, indent=2, ensure_ascii=False))
+        FIXED_VCF = cfg.get("contactVcf") or "contacto.vcf"
+        write_file(os.path.join(spath, FIXED_VCF), generate_vcf(cfg))
+    except Exception as e:
+        app.logger.warning("Cambios guardados en DB, pero falló escribir archivos: %s", e, exc_info=True)
+
+    # 4) Redirigir a la vista pública
+    return redirect(url_for("public_or_form", slug=slug))
+    # ===================== FIN PERSISTENCIA CONDICIONADA AL EMAIL =====================
+
+# archivos del “sitio” por slug (ejemplo simple)
+@app.route("/sites/<slug>/<path:filename>")
+def serve_site_asset(slug, filename):
+    if not site_exists(slug):
+        abort(404)
+    return send_from_directory(site_path(slug), filename)
+
+
+# ---------- páginas de demostración ----------
+@app.route("/")
+def index():
+    return """
+    <h2>VariaTap • Demo</h2>
+    <p>Visita un link genérico, por ejemplo: <a href="/mislug">/mislug</a></p>
+    <p>Primera visita muestra formulario. Tras enviar, verás tu sitio y se envía link de edición por email (con código).</p>
+    """
+
+# plantilla mínima del "sitio" final (usando config.json)
+@app.route("/_debug/site_template")
+def dbg_site_template():
+    return """
+    <p>Este endpoint no es público. Se usa <code>templates/site.html</code> para renderizar el sitio.</p>
+    """
+
+@app.route("/_dev/test_email")
+def _dev_test_email():
+    to = request.args.get("to") or os.environ.get("SMTP_TEST_TO")
+    if not to:
+        return "Usa /_dev/test_email?to=correo@ejemplo.com o define SMTP_TEST_TO.", 400
+    html = "<h3>Prueba SMTP</h3><p>Si ves esto, tu SMTP funciona ✔️</p>"
+    try:
+        send_email(to, "Prueba de correo VariaTap", html, "Prueba SMTP (texto)")
+        return f"Enviado a {to}"
+    except Exception as e:
+        return f"ERROR enviando a {to}: {e}", 500
+    
+@app.route("/terminos")
+def terms():
+    return render_template("terms.html")  # crea templates/terms.html
+
+@app.route("/privacidad")
+def privacy():
+    return render_template("privacy.html")  # crea templates/privacy.html
+
+
+
+
+
+
+if __name__ == "__main__":
+    # Para desarrollo
+    app.run(debug=True, port=5000)

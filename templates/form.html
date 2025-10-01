@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" href="/static/Logo VariaTap.png" type="image/png">
+  <meta charset="UTF-8" />
+  <title>VariaTap — Configuración de Tarjeta</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --primary:#6c63ff; --accent:#25d366; --bg:#0f1020; --text:#e9e9ef; --muted:#b9bbd3;
+      --panel: rgba(255,255,255,.06); --panel2: rgba(255,255,255,.02); --border: rgba(255,255,255,.08);
+      --ring: 0 0 0 3px rgba(108,99,255,.18);
+      --radius: 18px;
+    }
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;padding:0;
+      background: radial-gradient(1200px 600px at 20% 0%, #1a1b35, #0f1020);
+      color:var(--text);
+      font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+    a{color:#c7c9ff}
+    header{padding:28px 18px 10px; text-align:center}
+    header img{width:120px; height:auto; display:block; margin:0 auto 10px; filter: drop-shadow(0 6px 16px rgba(0,0,0,.35))}
+    header h1{margin:6px 0 4px; font-weight:800; letter-spacing:.2px}
+    header p{margin:0; color:var(--muted)}
+
+    .wrap{max-width:840px; margin:24px auto 40px; padding:0 16px}
+    .panel{
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      padding:22px;
+      box-shadow:0 10px 30px rgba(0,0,0,.28);
+    }
+    .panel h2{margin:0 0 4px; font-size:1.5rem}
+    .panel p.lead{margin:0 0 14px; color:var(--muted)}
+
+    form .field{margin:14px 0}
+    label{display:block; margin:0 0 8px; color:var(--muted); font-size:.95rem}
+    input[type=text],input[type=email],input[type=file],input[type=tel],select,textarea{
+      width:100%; padding:12px 14px; border-radius:14px; border:1px solid rgba(255,255,255,.14);
+      background:rgba(8,10,24,.6); color:var(--text); outline:none;
+    }
+    input:focus,select:focus,textarea:focus{ box-shadow: var(--ring) }
+
+    fieldset{margin:18px 0; border:1px dashed rgba(255,255,255,.18); border-radius:14px; padding:12px}
+    fieldset legend{color:var(--muted); padding:0 6px}
+
+    .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+    .grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px}
+    @media (max-width:720px){ .grid-2,.grid-3{grid-template-columns:1fr} }
+
+    .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px}
+    .btn{display:inline-flex; align-items:center; gap:10px; text-decoration:none; padding:14px 18px; border-radius:14px; font-weight:700; border:1px solid rgba(255,255,255,.12)}
+    .btn.primary{background:var(--accent); color:#0a120e; box-shadow:0 10px 24px rgba(37,211,102,.35)}
+    .btn.secondary{background:rgba(255,255,255,.08); color:var(--text)}
+    .btn:hover{transform:translateY(-1px); transition:transform .15s ease, filter .15s ease}
+
+    .muted{color:var(--muted); font-size:.9rem}
+    .hint{margin-top:6px; color:var(--muted); font-size:.85rem}
+
+    footer{text-align:center; padding:28px 12px; color:var(--muted); font-size:.95rem}
+  </style>
+</head>
+
+<body>
+  <header>
+    <img src="/static/brand/variataplogofull-white.png" alt="VariaTap">
+    <h1>VariaTap</h1>
+    <p>Configura tu tarjeta NFC (datos, no diseño)</p>
+  </header>
+
+  <div class="wrap">
+    <div class="panel">
+      <h2>{{ 'Editar tarjeta' if mode=='edit' else 'Crear tarjeta' }}</h2>
+      <p class="lead">Slug: <strong>{{ slug }}</strong></p>
+      
+      {% if error %} <div style=" margin:12px 0; padding:12px 14px; border-radius:12px; background: rgba(255,0,0,.08); border: 1px solid rgba(255,0,0,.25); color: #ffb3b3;"> {{ error }} </div> {% endif %}
+      
+      <!-- Mensajes (colócalo justo arriba del form) -->
+      <div id="msg" style="display:none;margin:12px 0;padding:12px 14px;border-radius:12px;
+        background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);font-weight:600;"
+        role="alert" aria-live="polite"></div>
+
+      <form id="cfgForm"
+            method="post"
+            action="{% if mode == 'edit' %}{{ url_for('edit_form', slug=slug) }}{% else %}{{ url_for('setup', slug=slug) }}{% endif %}"
+            enctype="multipart/form-data"
+            novalidate
+            onsubmit="return validateEmails(event)">
+
+        {% if mode == "edit" %}
+          <input type="hidden" name="token" value="{{ token }}">
+        {% endif %}
+
+        <div class="field">
+          <label for="name">Nombre *</label>
+          <input id="name" name="name" type="text" placeholder="Tu nombre" required
+                 value="{{ cfg.name if cfg else '' }}">
+          <div class="hint">El <strong>título</strong> se establecerá automáticamente igual al <strong>nombre</strong>.</div>
+        </div>
+
+        <div class="field">
+          <label for="subtitle">Subtítulo</label>
+          <input id="subtitle" name="subtitle" type="text" placeholder="Empresa o frase"
+                 value="{{ cfg.subtitle if cfg else '' }}">
+        </div>
+
+        <div class="grid-2">
+          <div class="field" style="position:relative">
+            <label for="avatar">Avatar</label>
+            <input id="avatar" name="avatar" type="file" accept="image/*">
+            <input type="hidden" name="avatar_remove" id="avatar_remove" value="0">
+            {% if cfg and cfg.avatar %}
+              <div class="hint">Actual: <code>{{ cfg.avatar }}</code></div>
+              <button
+                type="button"
+                id="btn-remove-avatar"
+                aria-label="Quitar avatar"
+                title="Quitar avatar"
+                style="position:absolute;top:28px;right:10px;background:rgba(255,255,255,.1);
+                      border:1px solid rgba(255,255,255,.2);border-radius:50%;width:32px;height:32px;
+                      display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                ✕
+              </button>
+            {% endif %}
+          </div>
+
+          <div class="field" style="position:relative">
+            <label for="companyLogo">Logo de empresa</label>
+            <input id="companyLogo" name="companyLogo" type="file" accept="image/*">
+            <input type="hidden" name="companyLogo_remove" id="companyLogo_remove" value="0">
+            {% if cfg and cfg.companyLogo %}
+              <div class="hint">Actual: <code>{{ cfg.companyLogo }}</code></div>
+              <button
+                type="button"
+                id="btn-remove-logo"
+                aria-label="Quitar logo"
+                title="Quitar logo"
+                style="position:absolute;top:28px;right:10px;background:rgba(255,255,255,.1);
+                      border:1px solid rgba(255,255,255,.2);border-radius:50%;width:32px;height:32px;
+                      display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                ✕
+              </button>
+            {% endif %}
+          </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="email">Correo *</label>
+            <input id="email" name="email" type="email" required
+                   value="{{ cfg.email if cfg else '' }}">
+          </div>
+          <div class="field">
+            <label for="email_confirm">Confirmar correo *</label>
+            <input id="email_confirm" name="email_confirm" type="email" required>
+          </div>
+        </div>
+
+        <fieldset>
+          <legend>Teléfonos</legend>
+          <div class="grid-3">
+            <input name="phones.cell" type="tel" placeholder="Celular"
+                   value="{{ cfg.phones.cell if cfg and cfg.phones and cfg.phones.cell else '' }}">
+            <input name="phones.work" type="tel" placeholder="Trabajo"
+                   value="{{ cfg.phones.work if cfg and cfg.phones and cfg.phones.work else '' }}">
+            <input name="phones.home" type="tel" placeholder="Casa"
+                   value="{{ cfg.phones.home if cfg and cfg.phones and cfg.phones.home else '' }}">
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Redes Sociales</legend>
+          <div class="grid-2">
+            <input name="socials.instagram" placeholder="Instagram"
+                   value="{{ cfg.socials.instagram if cfg and cfg.socials and cfg.socials.instagram else '' }}">
+            <input name="socials.x" placeholder="X (Twitter)"
+                   value="{{ cfg.socials.x if cfg and cfg.socials and cfg.socials.x else '' }}">
+            <input name="socials.tiktok" placeholder="TikTok"
+                   value="{{ cfg.socials.tiktok if cfg and cfg.socials and cfg.socials.tiktok else '' }}">
+            <input name="socials.youtube" placeholder="YouTube"
+                   value="{{ cfg.socials.youtube if cfg and cfg.socials and cfg.socials.youtube else '' }}">
+            <input name="socials.linkedin" placeholder="LinkedIn"
+                   value="{{ cfg.socials.linkedin if cfg and cfg.socials and cfg.socials.linkedin else '' }}">
+            <input name="socials.facebook" placeholder="Facebook"
+                   value="{{ cfg.socials.facebook if cfg and cfg.socials and cfg.socials.facebook else '' }}">
+            <input name="socials.website" placeholder="Sitio web"
+                   value="{{ cfg.socials.website if cfg and cfg.socials and cfg.socials.website else '' }}">
+            <input name="socials.whatsapp" placeholder="WhatsApp (link completo)"
+                   value="{{ cfg.socials.whatsapp if cfg and cfg.socials and cfg.socials.whatsapp else '' }}">
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label for="theme">Tema</label>
+          <select id="theme" name="theme">
+            {% set current_theme = (cfg.theme if cfg else 'indigo') | lower %}
+            {% for t in [
+              "default (dark glow)","ocean","sunset","forest","mono",
+              "silver","gold","lavender","rose","mint",
+              "teal","indigo","coral","cyberpunk"
+            ] %}
+              <option value="{{ t }}" {% if t|lower == current_theme %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+          <div class="hint">
+            👉 <a href="https://variatap.com/ejemplo/tu-nombre" target="_blank" rel="noopener">Ver ejemplo de temas</a>
+          </div>
+          {% if mode != "edit" %}
+          <div class="field">
+            <label style="display:flex; gap:10px; align-items:flex-start">
+              <input id="accept_terms" name="accept_terms" type="checkbox" required style="margin-top:3px;">
+              <span>
+                Acepto los
+                <a href="{{ url_for('terms') }}" target="_blank" rel="noopener">Términos y Condiciones</a>
+                y el
+                <a href="{{ url_for('privacy') }}" target="_blank" rel="noopener">Aviso de Privacidad</a>.
+              </span>
+            </label>
+            <div class="hint">Necesario para crear tu tarjeta.</div>
+          </div>
+          {% endif %}
+
+        </div>
+        {% if mode == "edit" %}
+        <div class="field">
+          <label for="verify_code">Código de verificación (enviado por email)</label>
+          <input id="verify_code" name="verify_code" type="text" placeholder="000000">
+        </div>
+        {% endif %}
+
+        <div class="actions">
+          <button class="btn primary" type="submit">
+            {% if mode == "edit" %}Guardar cambios{% else %}Crear tarjeta{% endif %}
+          </button>
+          <a class="btn secondary" href="https://variatap.com/ejemplo/tu-nombre" target="_blank" rel="noopener">
+            Ver ejemplo
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer>© 2025 VariaTap</footer>
+
+  <script>
+  (function () {
+    const form = document.getElementById('cfgForm');
+    if (!form) return;
+
+    const msgBox = document.getElementById('msg');
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    function showMsg(text, type = 'error') {
+      // estilos rápidos por tipo
+      const styles = {
+        error:  { bg: 'rgba(255,0,0,.08)',  br: '1px solid rgba(255,0,0,.28)',  color: '#ffb3b3' },
+        ok:     { bg: 'rgba(0,255,0,.08)',  br: '1px solid rgba(0,255,0,.28)',  color: '#b3ffb3' },
+        info:   { bg: 'rgba(255,255,255,.06)', br: '1px solid rgba(255,255,255,.12)', color: '#e9e9ef' }
+      }[type];
+
+      msgBox.style.display = 'block';
+      msgBox.style.background = styles.bg;
+      msgBox.style.border = styles.br;
+      msgBox.style.color = styles.color;
+      msgBox.textContent = text;
+      // llevar la vista al mensaje si está fuera de pantalla
+      msgBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function clearMsg() {
+      msgBox.style.display = 'none';
+      msgBox.textContent = '';
+    }
+
+    function setSubmitting(isSubmitting) {
+      if (!submitBtn) return;
+      if (isSubmitting) {
+        submitBtn.dataset._origText = submitBtn.textContent;
+        submitBtn.textContent = 'Enviando…';
+        submitBtn.disabled = true;
+      } else {
+        if (submitBtn.dataset._origText) submitBtn.textContent = submitBtn.dataset._origText;
+        submitBtn.disabled = false;
+      }
+    }
+
+    function isCreateMode() {
+      // En "create" existe el campo de confirmación; en "edit" no.
+      return !!document.getElementById('email_confirm');
+    }
+
+    function validateEmailsClient() {
+      const emailInput = document.getElementById('email');
+      const confirmInput = document.getElementById('email_confirm');
+      if (!confirmInput) return true; // en edición no validamos confirmación
+
+      const email = (emailInput.value || '').trim().toLowerCase();
+      const email2 = (confirmInput.value || '').trim().toLowerCase();
+
+      if (!email || !email2) {
+        showMsg('Debes ingresar ambos correos.', 'error');
+        (!email ? emailInput : confirmInput).focus();
+        return false;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email) || !emailRegex.test(email2)) {
+        showMsg('Debes ingresar correos válidos (ejemplo@dominio.com).', 'error');
+        confirmInput.focus();
+        return false;
+      }
+
+      if (email !== email2) {
+        showMsg('Los correos no coinciden. Corrige antes de continuar.', 'error');
+        confirmInput.focus();
+        return false;
+      }
+      return true;
+    }
+
+    function validateVerifyCodeClient() {
+      // Sólo en modo edición existe el código
+      const codeInput = document.getElementById('verify_code');
+      if (!codeInput) return true;
+
+      const code = (codeInput.value || '').trim();
+      if (!/^\d{6}$/.test(code)) {
+        showMsg('El código de verificación debe tener 6 dígitos.', 'error');
+        codeInput.focus();
+        return false;
+      }
+      return true;
+    }
+
+    form.addEventListener('submit', async function (e) {
+      // Siempre manejamos vía fetch para poder mostrar errores de backend sin recargar
+      e.preventDefault();
+      clearMsg();
+
+      // Validaciones en cliente
+      if (isCreateMode()) {
+        if (!validateEmailsClient()) return;
+      }
+      if (!isCreateMode()) {
+        if (!validateVerifyCodeClient()) return;
+      }
+
+      // Enviar con fetch
+      try {
+        setSubmitting(true);
+        const fd = new FormData(form);
+        const resp = await fetch(form.action, { method: 'POST', body: fd });
+
+        // Si el servidor redirige (201/302) algunos navegadores exponen .redirected
+        if (resp.redirected) {
+          window.location.href = resp.url;
+          return;
+        }
+
+        if (!resp.ok) {
+          const text = (await resp.text()).trim();
+
+          let friendly;
+          if (text.includes("verificación inválido")) {
+            friendly = "El código es incorrecto. Verifica y vuelve a intentarlo.";
+          } else if (text.includes("Emails no coinciden")) {
+            friendly = "Los correos no coinciden. Corrige antes de continuar.";
+          } else {
+            friendly = text || "No se pudo guardar. Revisa los campos.";
+          }
+
+          showMsg(friendly, 'error');
+          setSubmitting(false);
+          return;
+        }
+
+
+        // Si el backend devuelve 200 sin redirigir, asumimos que recarga la vista del slug
+        // o devolvió HTML. En ese caso, intentamos navegar manualmente.
+        const html = await resp.text();
+        // Heurística mínima: si vino HTML con <title> nos movemos a la misma URL (servidor sirve la nueva vista)
+        if (/<html/i.test(html)) {
+          document.open(); document.write(html); document.close();
+        } else {
+          // fallback
+          showMsg('Guardado correctamente.', 'ok');
+          setSubmitting(false);
+        }
+
+      } catch (err) {
+        console.error(err);
+        showMsg('Error de conexión. Intenta de nuevo.', 'error');
+        setSubmitting(false);
+      }
+    });
+
+    // --- quitar avatar
+    const btnRemoveAvatar = document.getElementById('btn-remove-avatar');
+    if (btnRemoveAvatar) {
+      btnRemoveAvatar.addEventListener('click', function () {
+        const removeField = document.getElementById('avatar_remove');
+        const fileInput = document.getElementById('avatar');
+        if (removeField) removeField.value = '1';
+        if (fileInput) fileInput.value = ''; // por si habían seleccionado algo
+        showMsg('El avatar se marcará para eliminar al guardar.', 'info');
+      });
+    }
+
+    // --- quitar logo
+    const btnRemoveLogo = document.getElementById('btn-remove-logo');
+    if (btnRemoveLogo) {
+      btnRemoveLogo.addEventListener('click', function () {
+        const removeField = document.getElementById('companyLogo_remove');
+        const fileInput = document.getElementById('companyLogo');
+        if (removeField) removeField.value = '1';
+        if (fileInput) fileInput.value = '';
+        showMsg('El logo se marcará para eliminar al guardar.', 'info');
+      });
+    }
+
+    // resetear flags si seleccionan nuevo archivo
+    const avatarInput = document.getElementById('avatar');
+    if (avatarInput) {
+      avatarInput.addEventListener('change', function () {
+        const removeField = document.getElementById('avatar_remove');
+        if (removeField) removeField.value = '0';
+      });
+    }
+    const logoInput = document.getElementById('companyLogo');
+    if (logoInput) {
+      logoInput.addEventListener('change', function () {
+        const removeField = document.getElementById('companyLogo_remove');
+        if (removeField) removeField.value = '0';
+      });
+    }
+    
+    // Validaciones en cliente
+    if (isCreateMode()) {
+      if (!validateEmailsClient()) return;
+      const accept = document.getElementById('accept_terms');
+      if (!accept || !accept.checked) {
+        showMsg('Debes aceptar los Términos y Condiciones para continuar.', 'error');
+        accept && accept.focus();
+        return;
+      }
+    }
+
+
+  })();
+
+
+
+  </script>
+
+
+</body>
+</html>

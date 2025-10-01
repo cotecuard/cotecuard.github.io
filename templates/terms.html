@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" href="/static/Logo VariaTap.png" type="image/png">  
+  <meta charset="utf-8">
+  <title>Términos y Condiciones — VariaTap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{
+      --primary:#6c63ff; --bg:#0f1020; --text:#e9e9ef; --muted:#b9bbd3;
+      --panel: rgba(255,255,255,.06); --border: rgba(255,255,255,.12); --radius:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:#0f1020;color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    a{color:#c7c9ff}
+    header{max-width:920px;margin:24px auto 8px;padding:0 16px}
+    header h1{margin:0 0 8px;font-size:2rem}
+    header p{margin:0;color:var(--muted)}
+    .wrap{max-width:920px;margin:16px auto 40px;padding:0 16px}
+    .panel{background:linear-gradient(180deg, var(--panel), rgba(255,255,255,.02));
+      border:1px solid var(--border);border-radius:var(--radius);padding:22px}
+    .meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:.95rem}
+    h2{margin:22px 0 8px;font-size:1.3rem}
+    h3{margin:16px 0 6px;font-size:1.05rem}
+    ul{margin:.4rem 0 .8rem 1.1rem}
+    .toc{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px}
+    footer{max-width:920px;margin:28px auto;padding:0 16px;color:var(--muted);font-size:.95rem;text-align:center}
+    .btn{display:inline-block;margin-top:10px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);text-decoration:none}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Términos y Condiciones</h1>
+    <p class="meta">
+      <span>Versión: <strong>{{ terms_version|default('v1') }}</strong></span>
+      <span>Última actualización: <strong>{{ last_updated|default('2025-09-30') }}</strong></span>
+    </p>
+  </header>
+
+  <div class="wrap">
+    <div class="panel">
+      <div class="toc">
+        <strong>Contenido</strong>
+        <ul>
+          <li><a href="#aceptacion">1. Aceptación</a></li>
+          <li><a href="#uso">2. Uso del servicio</a></li>
+          <li><a href="#cuentas">3. Cuentas y verificación</a></li>
+          <li><a href="#contenido">4. Contenido del usuario</a></li>
+          <li><a href="#pagos">5. Pagos y precios</a></li>
+          <li><a href="#prohibido">6. Usos prohibidos</a></li>
+          <li><a href="#propiedad">7. Propiedad intelectual</a></li>
+          <li><a href="#responsabilidad">8. Limitación de responsabilidad</a></li>
+          <li><a href="#terminacion">9. Terminación</a></li>
+          <li><a href="#cambios">10. Cambios a estos términos</a></li>
+          <li><a href="#contacto">11. Contacto</a></li>
+        </ul>
+      </div>
+
+      <h2 id="aceptacion">1. Aceptación</h2>
+      <p>Al crear tu tarjeta o utilizar VariaTap, aceptas estos Términos y nuestra <a href="{{ url_for('privacy') }}">Política de Privacidad</a>. Si no estás de acuerdo, no uses el servicio.</p>
+
+      <h2 id="uso">2. Uso del servicio</h2>
+      <p>VariaTap genera un enlace único que muestra tus datos públicos (p.ej., nombre, redes, teléfonos). Eres responsable de la veracidad y actualización de la información que publiques.</p>
+
+      <h2 id="cuentas">3. Cuentas y verificación</h2>
+      <p>Para editar tu tarjeta se requiere un enlace de edición y un código de verificación enviado a tu correo. Debes mantener ese acceso de forma segura.</p>
+
+      <h2 id="contenido">4. Contenido del usuario</h2>
+      <p>Conservas los derechos sobre tu contenido. Nos otorgas una licencia limitada para almacenarlo y mostrarlo a través del enlace. No publiques contenido ilegal, ofensivo o que infrinja derechos de terceros.</p>
+
+      <h2 id="pagos">5. Pagos y precios</h2>
+      <p>(Si aplica) Los precios podrán cambiar. Te informaremos con antelación razonable cuando te afecte un cambio.</p>
+
+      <h2 id="prohibido">6. Usos prohibidos</h2>
+      <ul>
+        <li>Subir malware, SPAM o contenido engañoso.</li>
+        <li>Vulnerar la privacidad o derechos de autor de terceros.</li>
+        <li>Intentar eludir los mecanismos de seguridad o verificación.</li>
+      </ul>
+
+      <h2 id="propiedad">7. Propiedad intelectual</h2>
+      <p>El software, marca y diseño de VariaTap pertenecen a sus titulares. No se concede ninguna licencia salvo lo expresamente indicado.</p>
+
+      <h2 id="responsabilidad">8. Limitación de responsabilidad</h2>
+      <p>El servicio se ofrece “tal cual”. En la medida permitida por ley, no respondemos por daños indirectos, pérdida de datos o lucro cesante. Haremos esfuerzos razonables por la continuidad del servicio.</p>
+
+      <h2 id="terminacion">9. Terminación</h2>
+      <p>Podemos suspender o terminar cuentas que violen estos términos. Puedes solicitar la eliminación de tu tarjeta y datos conforme a la Política de Privacidad.</p>
+
+      <h2 id="cambios">10. Cambios a estos términos</h2>
+      <p>Podemos actualizar estos términos. Si el cambio es sustancial, podremos solicitarte re-aceptación antes de permitir nuevas ediciones.</p>
+
+      <h2 id="contacto">11. Contacto</h2>
+      <p>Para dudas sobre estos Términos, escríbenos a: <a href="mailto:variatapteam@gmail.com">variatapteam@gmail.com</a>.</p>
+
+      <a class="btn" href="{{ url_for('index') }}">Volver</a>
+    </div>
+  </div>
+
+  <footer>© 2025 VariaTap</footer>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" href="/static/Logo VariaTap.png" type="image/png">  
+  <meta charset="utf-8">
+  <title>Política de Privacidad — VariaTap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{
+      --primary:#6c63ff; --bg:#0f1020; --text:#e9e9ef; --muted:#b9bbd3;
+      --panel: rgba(255,255,255,.06); --border: rgba(255,255,255,.12); --radius:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:#0f1020;color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    a{color:#c7c9ff}
+    header{max-width:920px;margin:24px auto 8px;padding:0 16px}
+    header h1{margin:0 0 8px;font-size:2rem}
+    header p{margin:0;color:var(--muted)}
+    .wrap{max-width:920px;margin:16px auto 40px;padding:0 16px}
+    .panel{background:linear-gradient(180deg, var(--panel), rgba(255,255,255,.02));
+      border:1px solid var(--border);border-radius:var(--radius);padding:22px}
+    .meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:.95rem}
+    h2{margin:22px 0 8px;font-size:1.3rem}
+    h3{margin:16px 0 6px;font-size:1.05rem}
+    ul{margin:.4rem 0 .8rem 1.1rem}
+    .toc{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px}
+    footer{max-width:920px;margin:28px auto;padding:0 16px;color:var(--muted);font-size:.95rem;text-align:center}
+    .btn{display:inline-block;margin-top:10px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);text-decoration:none}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Política de Privacidad</h1>
+    <p class="meta">
+      <span>Versión: <strong>{{ privacy_version|default('v1') }}</strong></span>
+      <span>Última actualización: <strong>{{ last_updated|default('2025-09-30') }}</strong></span>
+    </p>
+  </header>
+
+  <div class="wrap">
+    <div class="panel">
+      <div class="toc">
+        <strong>Contenido</strong>
+        <ul>
+          <li><a href="#datos">1. Datos que recolectamos</a></li>
+          <li><a href="#uso">2. Cómo usamos tus datos</a></li>
+          <li><a href="#compartir">3. Compartición y terceros</a></li>
+          <li><a href="#retencion">4. Retención y borrado</a></li>
+          <li><a href="#seguridad">5. Seguridad</a></li>
+          <li><a href="#derechos">6. Tus derechos</a></li>
+          <li><a href="#cookies">7. Cookies</a></li>
+          <li><a href="#cambios">8. Cambios a esta política</a></li>
+          <li><a href="#contacto">9. Contacto</a></li>
+        </ul>
+      </div>
+
+      <h2 id="datos">1. Datos que recolectamos</h2>
+      <ul>
+        <li>Datos de perfil y contacto que ingresas (nombre, correo, teléfonos, redes).</li>
+        <li>Archivos que subes (p. ej., avatar y logotipo).</li>
+        <li>Metadatos técnicos mínimos (IP, agente de usuario) para seguridad y diagnóstico.</li>
+      </ul>
+
+      <h2 id="uso">2. Cómo usamos tus datos</h2>
+      <p>Para crear y mostrar tu tarjeta, enviarte códigos de verificación, prevenir abuso, y mejorar el servicio.</p>
+
+      <h2 id="compartir">3. Compartición y terceros</h2>
+      <p>No vendemos tus datos. Podemos usar proveedores (p. ej., SMTP) para operar funciones específicas, bajo acuerdos adecuados.</p>
+
+      <h2 id="retencion">4. Retención y borrado</h2>
+      <p>Guardamos los datos mientras tu tarjeta esté activa. Puedes solicitar la eliminación; al hacerlo, borraremos datos y archivos vinculados salvo lo requerido por ley.</p>
+
+      <h2 id="seguridad">5. Seguridad</h2>
+      <p>Aplicamos medidas razonables (aislamiento de uploads, códigos de verificación, registros). Ningún sistema es 100% seguro; avísanos ante incidentes.</p>
+
+      <h2 id="derechos">6. Tus derechos</h2>
+      <p>Puedes acceder, corregir o eliminar tus datos. Escríbenos a <a href="mailto:variatapteam@gmail.com">variatapteam@gmail.com</a>.</p>
+
+      <h2 id="cookies">7. Cookies</h2>
+      <p>Usamos cookies técnicas esenciales para el funcionamiento del formulario y la sesión.</p>
+
+      <h2 id="cambios">8. Cambios a esta política</h2>
+      <p>Si realizamos cambios sustanciales, lo indicaremos claramente y, cuando aplique, pediremos tu reaceptación.</p>
+
+      <h2 id="contacto">9. Contacto</h2>
+      <p><a href="mailto:variatapteam@gmail.com">variatapteam@gmail.com</a></p>
+
+      <a class="btn" href="{{ url_for('index') }}">Volver</a>
+    </div>
+  </div>
+
+  <footer>© 2025 VariaTap</footer>
+</body>
+</html>
