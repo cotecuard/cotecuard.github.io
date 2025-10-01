@@ -10,16 +10,34 @@ import ssl, smtplib
 from werkzeug.utils import secure_filename, safe_join
 import time
 import unicodedata
+from werkzeug.routing import BaseConverter
 
+#######################
 
+# Raíz del proyecto (archivo actual)
 APP_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_PATH = os.path.join(APP_DIR, "data.db")
-SITES_DIR = os.path.join(APP_DIR, "sites")
-UPLOADS_DIR = os.path.join(APP_DIR, "static", "uploads")
 
-SITE_INDEX_DIR = os.path.join(APP_DIR, "index")       # carpeta con index/index.html
-PERFILES_DIR   = os.path.join(APP_DIR, "Perfiles")    # carpeta con perfiles
+# ── Rutas PERSISTENTES (con fallback para local) ──────────────────────────────
+# En Render pon: DATA_DIR=/app/sites  y  UPLOADS_DIR=/app/static/uploads
+DATA_DIR    = os.environ.get("DATA_DIR",    os.path.join(APP_DIR, "sites"))
+UPLOADS_DIR = os.environ.get("UPLOADS_DIR", os.path.join(APP_DIR, "static", "uploads"))
 
+# Asegura que existan (local o Render)
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+# SQLite (puedes dejarla dentro de DATA_DIR para que también persista)
+DB_PATH = os.path.join(DATA_DIR, "data.db")
+
+# Contenidos estáticos que ya tienes en el repo
+SITE_INDEX_DIR = os.path.join(APP_DIR, "index")     # carpeta con index/index.html
+PERFILES_DIR   = os.path.join(APP_DIR, "Perfiles")  # carpeta con perfiles
+
+# ¡Clave!: donde se buscan los slugs de tarjetas
+SITES_DIR = DATA_DIR
+
+
+########################
 
 os.makedirs(SITES_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
@@ -51,6 +69,15 @@ init_db()
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 SIGNER = URLSafeSerializer(app.config["SECRET_KEY"], salt="edit-link")
+
+#converter
+
+class NotCConverter(BaseConverter):
+    # Coincide con cualquier primer segmento que NO sea exactamente "c"
+    regex = r'(?!c$)[^/]+'
+
+app.url_map.converters['notc'] = NotCConverter
+
 
 # ---------- utilidades ----------
 
@@ -360,7 +387,7 @@ def _normalize_path(p: str) -> str:
 def _is_reserved(first_segment: str) -> bool:
     return first_segment.lower() in RESERVED_PREFIXES
 
-@app.route("/<perfil>/")
+@app.route("/<notc:perfil>/")   
 def perfil_folder(perfil):
     perfil = _normalize_path(perfil)
     if _is_reserved(perfil):
@@ -377,7 +404,7 @@ def perfil_folder(perfil):
         return send_file(cand2)
     abort(404)
 
-@app.route("/<perfil>/<path:resto>")
+@app.route("/<notc:perfil>/<path:resto>")
 def perfil_file(perfil, resto):
     perfil = _normalize_path(perfil)
     if _is_reserved(perfil):
@@ -822,6 +849,21 @@ def terms():
 def privacy():
     return render_template("privacy.html")  # crea templates/privacy.html
 
+@app.get("/_debug/paths")
+def debug_paths():
+    return {
+        "APP_DIR": APP_DIR,
+        "DATA_DIR": DATA_DIR,
+        "SITES_DIR": SITES_DIR,
+        "UPLOADS_DIR": UPLOADS_DIR,
+        "sites_exists": os.path.isdir(SITES_DIR),
+        "test01_exists": os.path.isdir(os.path.join(SITES_DIR, "test01")),
+    }
+
+@app.get("/_debug/routes")
+def debug_routes():
+    # ojo: solo para debug local, no en producción
+    return {"rules": [str(r) for r in app.url_map.iter_rules()]}
 
 
 
