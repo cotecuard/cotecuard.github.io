@@ -865,6 +865,10 @@ def debug_routes():
     # ojo: solo para debug local, no en producción
     return {"rules": [str(r) for r in app.url_map.iter_rules()]}
 
+# Sirve archivos subidos desde el directorio UPLOADS_DIR (p. ej. /app/static/uploads en Render)
+@app.route("/static/uploads/<path:filename>")
+def serve_uploaded_file(filename):
+    return send_from_directory(UPLOADS_DIR, filename)
 
 
 
@@ -872,3 +876,4 @@ def debug_routes():
 if __name__ == "__main__":
     # Para desarrollo
     app.run(debug=True, port=5000)
+
