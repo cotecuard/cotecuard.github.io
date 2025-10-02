@@ -114,8 +114,7 @@
             method="post"
             action="{% if mode == 'edit' %}{{ url_for('edit_form', slug=slug) }}{% else %}{{ url_for('setup', slug=slug) }}{% endif %}"
             enctype="multipart/form-data"
-            novalidate
-            onsubmit="return validateEmails(event)">
+            novalidate>
 
         {% if mode == "edit" %}
           <input type="hidden" name="token" value="{{ token }}">
@@ -328,6 +327,36 @@
 
     const msgBox = document.getElementById('msg');
     const submitBtn = form.querySelector('button[type="submit"]');
+
+    // === validación suave de emails (solo al perder foco) ===
+    const emailInput = document.getElementById('email');
+    const confirmInput = document.getElementById('email_confirm');
+
+    function softEmailCheck() {
+      if (!emailInput || !confirmInput) return;
+      const a = (emailInput.value || '').trim();
+      const b = (confirmInput.value || '').trim();
+      if (!a || !b) { clearMsg(); return; } // no mostrar nada si falta alguno
+
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!re.test(a) || !re.test(b)) {
+        showMsg('Debes ingresar correos válidos.', 'error');
+        return;
+      }
+      if (a.toLowerCase() !== b.toLowerCase()) {
+        showMsg('Los correos no coinciden.', 'error');
+        return;
+      }
+      clearMsg(); // todo bien → quitamos mensaje
+    }
+
+    if (emailInput) emailInput.addEventListener('blur', softEmailCheck);
+    if (confirmInput) confirmInput.addEventListener('blur', softEmailCheck);
+
+
+    emailInput && emailInput.addEventListener('blur', softEmailCheck);
+    confirmInput && confirmInput.addEventListener('blur', softEmailCheck);
+
 
     // === Normalización de redes sociales ===
     function ensureProtocol(url) {
@@ -622,7 +651,7 @@
     }
 
     // Validaciones en cliente
-    if (isCreateMode()) {
+/*     if (isCreateMode()) {
       if (!validateEmailsClient()) return;
       const accept = document.getElementById('accept_terms');
       if (!accept || !accept.checked) {
@@ -630,7 +659,7 @@
         accept && accept.focus();
         return;
       }
-    }
+    } */
 
   })();
   </script>
