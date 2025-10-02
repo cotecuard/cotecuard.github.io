@@ -124,7 +124,6 @@
           <label for="name">Nombre *</label>
           <input id="name" name="name" type="text" placeholder="Tu nombre" required
                  value="{{ cfg.name if cfg else '' }}">
-          <div class="hint">El <strong>título</strong> se establecerá automáticamente igual al <strong>nombre</strong>.</div>
         </div>
 
         <div class="field">
@@ -136,7 +135,7 @@
         <div class="grid-2">
           <div class="field" style="position:relative">
             <!-- ✅ Solo texto visible cambiado -->
-            <label for="avatar">Profile Picture</label>
+            <label for="avatar">Foto de perfil</label>
             <input id="avatar" name="avatar" type="file" accept="image/*">
             <input type="hidden" name="avatar_remove" id="avatar_remove" value="0">
             {% if cfg and cfg.avatar %}
@@ -144,8 +143,8 @@
               <button
                 type="button"
                 id="btn-remove-avatar"
-                aria-label="Quitar Profile Picture"
-                title="Quitar Profile Picture"
+                aria-label="Quitar Foto de perfil"
+                title="Quitar Foto de perfil"
                 style="position:absolute;top:28px;right:10px;background:rgba(255,255,255,.1);
                       border:1px solid rgba(255,255,255,.2);border-radius:50%;width:32px;height:32px;
                       display:flex;align-items:center;justify-content:center;cursor:pointer;">
@@ -254,14 +253,14 @@
             <div class="field">
               <label for="socials.website">Sitio web</label>
               <input id="socials.website" name="socials.website" type="url"
-                    placeholder="tu-dominio.com (agregamos https://)"
+                    placeholder="tu-dominio.com"
                     value="{{ cfg.socials.website if cfg and cfg.socials and cfg.socials.website else '' }}">
             </div>
 
             <div class="field">
               <label for="socials.whatsapp">WhatsApp</label>
               <input id="socials.whatsapp" name="socials.whatsapp" type="url"
-                    placeholder="+52 123 456 7890  (convertimos a wa.me/)"
+                    placeholder="+52 123 456 7890"
                     value="{{ cfg.socials.whatsapp if cfg and cfg.socials and cfg.socials.whatsapp else '' }}">
             </div>
           </div>
