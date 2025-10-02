@@ -41,11 +41,32 @@
 
     form .field{margin:14px 0}
     label{display:block; margin:0 0 8px; color:var(--muted); font-size:.95rem}
-    input[type=text],input[type=email],input[type=file],input[type=tel],select,textarea{
-      width:100%; padding:12px 14px; border-radius:14px; border:1px solid rgba(255,255,255,.14);
-      background:rgba(8,10,24,.6); color:var(--text); outline:none;
+
+    /* ✅ Agregamos input[type=url] para que los campos de redes luzcan igual */
+    input[type=text],
+    input[type=email],
+    input[type=file],
+    input[type=tel],
+    input[type=url],
+    select,
+    textarea{
+      width:100%;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(8,10,24,.6);
+      color:var(--text);
+      outline:none;
     }
-    input:focus,select:focus,textarea:focus{ box-shadow: var(--ring) }
+    input[type=text]:focus,
+    input[type=email]:focus,
+    input[type=file]:focus,
+    input[type=tel]:focus,
+    input[type=url]:focus,
+    select:focus,
+    textarea:focus{
+      box-shadow: var(--ring);
+    }
 
     fieldset{margin:18px 0; border:1px dashed rgba(255,255,255,.18); border-radius:14px; padding:12px}
     fieldset legend{color:var(--muted); padding:0 6px}
@@ -64,6 +85,9 @@
     .hint{margin-top:6px; color:var(--muted); font-size:.85rem}
 
     footer{text-align:center; padding:28px 12px; color:var(--muted); font-size:.95rem}
+
+    /* ✅ Solo visual: temas en mayúsculas sin cambiar los valores enviados al backend */
+    #theme option { text-transform: uppercase; }
   </style>
 </head>
 
@@ -71,7 +95,7 @@
   <header>
     <img src="/static/brand/variataplogofull-white.png" alt="VariaTap">
     <h1>VariaTap</h1>
-    <p>Configura tu tarjeta NFC (datos, no diseño)</p>
+    <p>Configura tu tarjeta NFC</p>
   </header>
 
   <div class="wrap">
@@ -112,7 +136,8 @@
 
         <div class="grid-2">
           <div class="field" style="position:relative">
-            <label for="avatar">Avatar</label>
+            <!-- ✅ Solo texto visible cambiado -->
+            <label for="avatar">Profile Picture</label>
             <input id="avatar" name="avatar" type="file" accept="image/*">
             <input type="hidden" name="avatar_remove" id="avatar_remove" value="0">
             {% if cfg and cfg.avatar %}
@@ -120,8 +145,8 @@
               <button
                 type="button"
                 id="btn-remove-avatar"
-                aria-label="Quitar avatar"
-                title="Quitar avatar"
+                aria-label="Quitar Profile Picture"
+                title="Quitar Profile Picture"
                 style="position:absolute;top:28px;right:10px;background:rgba(255,255,255,.1);
                       border:1px solid rgba(255,255,255,.2);border-radius:50%;width:32px;height:32px;
                       display:flex;align-items:center;justify-content:center;cursor:pointer;">
@@ -176,34 +201,34 @@
         <fieldset>
           <legend>Redes Sociales</legend>
 
+          <!-- Nota general (se mantiene) -->
           <p class="hint" style="margin-top:0">
-            🔗 Pega los <strong>links completos</strong> de tus redes. Si escribes solo <code>@usuario</code> o un número de WhatsApp,
-            se convertirá automáticamente a un enlace válido al guardar.
+            🔗 Puedes pegar <strong>links completos</strong> o tu <code>@usuario</code> (lo convertimos a enlace) en:
+            <strong>Instagram, X (Twitter), TikTok y YouTube</strong>.<br>
+            🔒 En <strong>LinkedIn</strong> y <strong>Facebook</strong> debes pegar el <strong>enlace completo</strong> (no aceptamos <code>@usuario</code>).<br>
+            ✅ Si tu enlace no trae <code>https://</code>, lo agregamos automáticamente.
           </p>
 
           <div class="grid-2">
             <div class="field">
               <label for="socials.instagram">Instagram</label>
               <input id="socials.instagram" name="socials.instagram" type="url"
-                    placeholder="https://instagram.com/tu_usuario"
+                    placeholder="@tu_usuario"
                     value="{{ cfg.socials.instagram if cfg and cfg.socials and cfg.socials.instagram else '' }}">
-              <div class="hint">Ejemplo: <code>https://instagram.com/tu_usuario</code></div>
             </div>
 
             <div class="field">
               <label for="socials.x">X (Twitter)</label>
               <input id="socials.x" name="socials.x" type="url"
-                    placeholder="https://x.com/tu_usuario"
+                    placeholder="@tu_usuario"
                     value="{{ cfg.socials.x if cfg and cfg.socials and cfg.socials.x else '' }}">
-              <div class="hint">Ejemplo: <code>https://x.com/tu_usuario</code></div>
             </div>
 
             <div class="field">
               <label for="socials.tiktok">TikTok</label>
               <input id="socials.tiktok" name="socials.tiktok" type="url"
-                    placeholder="https://tiktok.com/@tu_usuario"
+                    placeholder="@tu_usuario"
                     value="{{ cfg.socials.tiktok if cfg and cfg.socials and cfg.socials.tiktok else '' }}">
-              <div class="hint">Ejemplo: <code>https://tiktok.com/@tu_usuario</code></div>
             </div>
 
             <div class="field">
@@ -211,7 +236,6 @@
               <input id="socials.youtube" name="socials.youtube" type="url"
                     placeholder="https://youtube.com/@tu_canal"
                     value="{{ cfg.socials.youtube if cfg and cfg.socials and cfg.socials.youtube else '' }}">
-              <div class="hint">Ejemplos: <code>https://youtube.com/@tu_canal</code> o <code>https://youtube.com/c/TuCanal</code></div>
             </div>
 
             <div class="field">
@@ -219,7 +243,6 @@
               <input id="socials.linkedin" name="socials.linkedin" type="url"
                     placeholder="https://www.linkedin.com/in/tu_usuario"
                     value="{{ cfg.socials.linkedin if cfg and cfg.socials and cfg.socials.linkedin else '' }}">
-              <div class="hint">Perfil personal: <code>/in/</code> — Empresa: <code>/company/</code></div>
             </div>
 
             <div class="field">
@@ -227,23 +250,20 @@
               <input id="socials.facebook" name="socials.facebook" type="url"
                     placeholder="https://facebook.com/tu_usuario"
                     value="{{ cfg.socials.facebook if cfg and cfg.socials and cfg.socials.facebook else '' }}">
-              <div class="hint">Ejemplo: <code>https://facebook.com/tu_usuario</code></div>
             </div>
 
             <div class="field">
               <label for="socials.website">Sitio web</label>
               <input id="socials.website" name="socials.website" type="url"
-                    placeholder="https://tu-dominio.com"
+                    placeholder="tu-dominio.com (agregamos https://)"
                     value="{{ cfg.socials.website if cfg and cfg.socials and cfg.socials.website else '' }}">
-              <div class="hint">Incluye <code>https://</code></div>
             </div>
 
             <div class="field">
               <label for="socials.whatsapp">WhatsApp</label>
               <input id="socials.whatsapp" name="socials.whatsapp" type="url"
-                    placeholder="https://wa.me/521234567890"
+                    placeholder="+52 123 456 7890  (convertimos a wa.me/)"
                     value="{{ cfg.socials.whatsapp if cfg and cfg.socials and cfg.socials.whatsapp else '' }}">
-              <div class="hint">Puedes pegar el link o solo tu número. Ej.: <code>+52 123 456 7890</code></div>
             </div>
           </div>
         </fieldset>
@@ -336,6 +356,7 @@
         return base + (allowAt ? '@' : '') + v;
       }
 
+      // si no parece username, asumir que es URL y asegurar https
       return ensureProtocol(v);
     }
 
@@ -356,33 +377,68 @@
         return `https://wa.me/${digits}`;
       }
 
+      // último recurso: si parece URL sin protocolo, agregarlo
       return ensureProtocol(v);
     }
 
+    /**
+     * Normaliza y valida campos sociales.
+     * Devuelve { ok: boolean, message?: string, focus?: HTMLElement }
+     */
     function normalizeSocialFields(formEl) {
       const map = {
-        'socials.instagram': { base: 'https://instagram.com/', allowAt: false },
-        'socials.x':         { base: 'https://x.com/',         allowAt: false },
-        'socials.tiktok':    { base: 'https://tiktok.com/',    allowAt: true  },
-        'socials.youtube':   { base: 'https://youtube.com/',   allowAt: true  },
-        'socials.linkedin':  { base: 'https://www.linkedin.com/in/', allowAt: false },
-        'socials.facebook':  { base: 'https://facebook.com/',  allowAt: false },
-        'socials.website':   { base: null,                     allowAt: false },
-        'socials.whatsapp':  { base: null,                     allowAt: false }
+        // ✅ convierten @usuario a enlace
+        'socials.instagram': { base: 'https://instagram.com/', allowAt: false, mode: 'handleOrUrl', label: 'Instagram' },
+        'socials.x':         { base: 'https://x.com/',         allowAt: false, mode: 'handleOrUrl', label: 'X (Twitter)' },
+        'socials.tiktok':    { base: 'https://tiktok.com/',    allowAt: true,  mode: 'handleOrUrl', label: 'TikTok' },
+        'socials.youtube':   { base: 'https://youtube.com/',   allowAt: true,  mode: 'handleOrUrl', label: 'YouTube' },
+
+        // 🔒 obligan link completo
+        'socials.linkedin':  { base: null,                     allowAt: false, mode: 'urlOnly',     label: 'LinkedIn' },
+        'socials.facebook':  { base: null,                     allowAt: false, mode: 'urlOnly',     label: 'Facebook' },
+
+        // otros
+        'socials.website':   { base: null,                     allowAt: false, mode: 'urlOnly',     label: 'Sitio web' },
+        'socials.whatsapp':  { base: null,                     allowAt: false, mode: 'whatsapp',    label: 'WhatsApp' }
       };
+
+      let firstInvalid = null;
+      const invalidLabels = [];
 
       Object.keys(map).forEach(name => {
         const input = formEl.querySelector(`[name="${name}"]`);
         if (!input || !input.value) return;
 
-        if (name === 'socials.whatsapp') {
+        const cfg = map[name];
+
+        if (cfg.mode === 'whatsapp') {
           input.value = normalizeWhatsApp(input.value);
-        } else if (name === 'socials.website') {
-          input.value = ensureProtocol(input.value);
-        } else {
-          input.value = normalizeHandleOrUrl(input.value, map[name]);
+          return;
         }
+
+        if (cfg.mode === 'handleOrUrl') {
+          input.value = normalizeHandleOrUrl(input.value, { base: cfg.base, allowAt: cfg.allowAt });
+          return;
+        }
+
+        // urlOnly: no aceptamos @usuario ni "username" pelón; solo URL (le agregamos https si falta)
+        let v = input.value.trim();
+        if (v.startsWith('@') || looksLikeUsername(v)) {
+          if (!firstInvalid) firstInvalid = input;
+          invalidLabels.push(cfg.label);
+          return; // no modificar el valor; se detendrá el submit
+        }
+        input.value = ensureProtocol(v);
       });
+
+      if (invalidLabels.length) {
+        return {
+          ok: false,
+          message: `Por favor pega el enlace completo en: ${invalidLabels.join(', ')} (no se acepta @usuario).`,
+          focus: firstInvalid
+        };
+      }
+      return { ok: true };
     }
 
     // === helpers originales ===
@@ -471,16 +527,20 @@
 
       if (isCreateMode()) {
         if (!validateEmailsClient()) return;
-      }
-      if (!isCreateMode()) {
+      } else {
         if (!validateVerifyCodeClient()) return;
+      }
+
+      // 🔒 Validación/normalización de redes (bloquea LinkedIn/Facebook si no son links)
+      const socialCheck = normalizeSocialFields(form);
+      if (!socialCheck.ok) {
+        showMsg(socialCheck.message, 'error');
+        socialCheck.focus && socialCheck.focus.focus();
+        return;
       }
 
       try {
         setSubmitting(true);
-
-        // 🔽 aquí normalizamos redes sociales antes de empaquetar
-        normalizeSocialFields(form);
 
         const fd = new FormData(form);
         const resp = await fetch(form.action, { method: 'POST', body: fd });
@@ -521,7 +581,7 @@
       }
     });
 
-    // --- quitar avatar
+    // --- quitar avatar (solo cambia el texto mostrado, no los IDs)
     const btnRemoveAvatar = document.getElementById('btn-remove-avatar');
     if (btnRemoveAvatar) {
       btnRemoveAvatar.addEventListener('click', function () {
@@ -529,7 +589,7 @@
         const fileInput = document.getElementById('avatar');
         if (removeField) removeField.value = '1';
         if (fileInput) fileInput.value = '';
-        showMsg('El avatar se marcará para eliminar al guardar.', 'info');
+        showMsg('La foto de perfil se marcará para eliminar al guardar.', 'info');
       });
     }
 
@@ -574,8 +634,6 @@
 
   })();
   </script>
-
-
 
 </body>
 </html>
