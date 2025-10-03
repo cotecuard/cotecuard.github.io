@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <link rel="icon" href="/static/Logo VariaTap.png" type="image/png">  
-  <base href="/index/">  
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VariaTap – Tarjeta NFC</title>
@@ -13,17 +11,22 @@
     :root {
       --primary: #6c63ff;
       --accent: #25d366;
-      --bg: #0f1020;
       --text: #e9e9ef;
       --muted: #b9bbd3;
+      --anim-glass: rgba(255,255,255,.06);
+      --anim-screen-off: #03060f;
     }
+
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0;
       font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: radial-gradient(1200px 600px at 20% 0%, #1a1b35, #0f1020);
       color: var(--text);
+      scroll-behavior: smooth;
+      /* FONDO CONSISTENTE EN TODO EL SITIO */
+      background: radial-gradient(1200px 800px at 80% -10%, #142050 0%, #0b1020 50%, #070b17 100%) fixed;
     }
+
     header { padding: 28px 18px 10px; text-align: center; }
     header img {
       width: 120px; height: auto; display: block; margin: 0 auto 10px;
@@ -32,55 +35,102 @@
     header h1 { margin: 6px 0 4px; font-weight: 800; letter-spacing: 0.2px; }
     header p { margin: 0; color: var(--muted); }
 
-    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px 40px; }
-
-    .showcase {
-      display: grid; grid-template-columns: 1.1fr 1fr;
-      gap: 28px; align-items: center;
-    }
-    @media (max-width: 900px) { .showcase { grid-template-columns: 1fr; } }
-
-    /* 3D Flip Card */
-    .stage { perspective: 1400px; }
-    .card3d {
+    /* ======== HERO A PANTALLA COMPLETA ======== */
+    .hero-anim {
+      height: 220vh;            /* Altura para permitir el recorrido del scroll */
       position: relative;
-      width: min(540px, 92vw);
-      aspect-ratio: 86 / 54; /* tamaño tarjeta bancaria */
-      margin: 0 auto;
-      transform-style: preserve-3d;
-      transition: transform 0.9s cubic-bezier(.2,.7,.1,1);
-      border-radius: 18px;
-      box-shadow: 0 18px 40px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.06);
-      cursor: pointer; /* para indicar que se puede hacer click */
-      touch-action: manipulation;
     }
-    /* Giro controlado por clase al hacer click */
-    .card3d.is-flipped { transform: rotateY(180deg); }
-
-    .face {
-      position: absolute; inset: 0;
-      background-position: center; background-size: cover; background-repeat: no-repeat;
-      border-radius: 18px; backface-visibility: hidden; overflow: hidden;
+    .stage {
+      position: sticky; top: 0; height: 100vh;
+      display: grid; place-items: center;
+      perspective: 1200px; perspective-origin: 50% 50%;
+      isolation: isolate;
     }
 
-    /* 👇 Si tus archivos se llaman distinto, cámbialos aquí */
-    .front { background-image: url('nfc_card_01.png'); }
-    .back  { background-image: url('nfc_card_02.png'); transform: rotateY(180deg); }
-
-    .face::after {
-      content: ""; position: absolute; inset: 0;
-      background: linear-gradient(145deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02));
-      pointer-events: none;
+    .phone{
+      position:relative; width:min(360px,80vw); height:720px; border-radius:42px;
+      background:linear-gradient(145deg,#11193a,#0a0f21);
+      box-shadow:0 20px 60px rgba(0,0,0,.55), inset 0 0 0 2px rgba(255,255,255,.06);
+      display:grid; place-items:center; z-index:5; transform:translateZ(0);
     }
-    .rim {
-      position: absolute; inset: -1px; border-radius: 20px;
+    .phone::before{
+      content:""; position:absolute; top:10px; left:50%; transform:translateX(-50%);
+      width:34%; height:24px; background:#0b1230; border-radius:0 0 16px 16px;
+      box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)
+    }
+    .bezel{position:absolute; inset:14px; border-radius:30px; background:var(--anim-glass); backdrop-filter:blur(6px);}
+
+    .screen{
+      position:absolute; inset:22px; border-radius:26px; overflow:hidden;
+      background:var(--anim-screen-off);
+      box-shadow:inset 0 0 40px rgba(0,0,0,.6);
+    }
+    .screen .glow{
+      position:absolute; inset:0; opacity:0; transition:opacity .6s ease, filter .6s ease;
       background:
-        radial-gradient(600px 280px at -10% -20%, rgba(108,99,255,0.55), transparent 60%),
-        radial-gradient(600px 280px at 120% 120%, rgba(37,211,102,0.45), transparent 60%);
-      mix-blend-mode: screen; opacity: .7; pointer-events: none;
+        radial-gradient(120% 120% at 50% 20%, rgba(94,225,255,.85), transparent 50%),
+        radial-gradient(100% 100% at 80% 80%, rgba(124,92,255,.6), transparent 55%);
+      filter:saturate(0.6) brightness(0.8);
+    }
+    .screen img{
+      position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+      opacity:0; transform:scale(1.06) translateY(6%);
+      transition:opacity .6s ease .05s, transform .8s cubic-bezier(.2,.7,.2,1);
+      filter:contrast(1.05) saturate(1.05);
+    }
+    .screen.on .glow{opacity:0.55; filter:saturate(1) brightness(1)}
+    .screen.on img{opacity:1; transform:scale(1) translateY(0)}
+
+    .anim-card{
+      position:absolute; width:min(520px,84vw); aspect-ratio:5/3; border-radius:24px; overflow:hidden;
+      background:linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      box-shadow:0 30px 80px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+      backdrop-filter:blur(8px);
+      color:var(--text); z-index:10; left:50%; transform-style:preserve-3d;
+      transform-origin:center; translate:-50% 0;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .anim-card img{ width:100%; height:100%; object-fit:cover; }
+
+    .depth-hint{
+      position:absolute; bottom:6vh; left:50%; translate:-50% 0;
+      color:#a3b0c2; font-size:.95rem; opacity:.85; user-select:none
     }
 
-    /* Panel derecho */
+    /* ======== RESPONSIVE: tarjeta y teléfono ======== */
+    /* Tarjeta: reducir gradualmente en pantallas pequeñas */
+    @media (max-width: 1024px){
+      .anim-card{ width: min(440px, 80vw); }
+    }
+    @media (max-width: 768px){
+      .anim-card{ width: min(380px, 76vw); }
+    }
+    @media (max-width: 480px){
+      .anim-card{ width: min(320px, 72vw); }
+    }
+    @media (max-width: 360px){
+      .anim-card{ width: min(290px, 70vw); }
+    }
+
+    /* Teléfono: escalar también en móviles para mantener proporciones y evitar desbordes */
+    @media (max-width: 768px){
+      .phone { width: min(300px, 72vw); height: 600px; }
+    }
+    @media (max-width: 480px){
+      .phone { width: min(260px, 70vw); height: 520px; }
+    }
+    @media (max-width: 360px){
+      .phone { width: min(230px, 68vw); height: 460px; }
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .hero-anim{ height:auto }
+      .stage{ position:static; height:auto }
+      .anim-card{ position:relative; translate:0 0; margin:3rem auto }
+    }
+
+    /* ======== CONTENIDO INFERIOR ======== */
+    .wrap { max-width: 900px; margin: 0 auto; padding: 28px 16px 48px; }
     .panel {
       background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
       border: 1px solid rgba(255,255,255,0.08);
@@ -113,7 +163,9 @@
     }
     .secondary:hover { transform: translateY(-1px); }
 
-    /* Tarjeta de ejemplo (preview) */
+    .bullets { margin: 14px 0; padding-left: 18px; }
+    .bullets li { margin: 6px 0; color: var(--text); }
+
     .example {
       margin-top: 14px; padding: 14px; border-radius: 12px;
       border: 1px dashed rgba(255,255,255,0.18);
@@ -134,11 +186,6 @@
       transition: transform .1s ease; z-index: 50;
     }
     .whatsapp-float:hover { transform: translateY(-1px); }
-
-    /* Accesibilidad / reduce motion */
-    @media (prefers-reduced-motion: reduce) {
-      .card3d { transition: transform 0.01s linear; }
-    }
   </style>
   <script src="https://kit.fontawesome.com/a2e0e9c6b5.js" crossorigin="anonymous"></script>
 </head>
@@ -146,50 +193,53 @@
   <header>
     <img src="variataplogofull white.png" alt="Logo VariaTap">
     <h1>VariaTap</h1>
-    <p>Tarjeta NFC con tus <strong>datos</strong> (no de diseño) • Frente y reverso</p>
+    <p>Tarjeta NFC con tu <strong>contacto</strong> y redes sociales</p>
   </header>
 
+  <!-- ======== HERO A PANTALLA COMPLETA ======== -->
+  <section class="hero-anim" aria-label="Animación de tarjeta y celular controlada por scroll">
+    <div class="stage">
+      <div class="phone" aria-hidden="true">
+        <div class="bezel"></div>
+        <div class="screen" id="screen">
+          <div class="glow" aria-hidden="true"></div>
+          <img src="telefono.png" alt="Imagen en la pantalla del teléfono" />
+        </div>
+      </div>
+
+      <article class="anim-card" id="animCard" aria-label="Tarjeta animada">
+        <img src="tarjeta.png" alt="Imagen de la tarjeta" />
+      </article>
+
+      <div class="depth-hint">Sigue bajando ↓</div>
+    </div>
+  </section>
+  <!-- ======== FIN HERO ======== -->
+
   <div class="wrap">
-    <section class="showcase">
-      <div class="stage">
-        <div class="card3d" aria-label="Tarjeta NFC VariaTap (frente y reverso)"
-             role="button" tabindex="0" aria-pressed="false">
-          <div class="face front"></div>
-          <div class="face back"></div>
-          <div class="rim"></div>
-        </div>
+    <div class="panel">
+      <h2>Tu tarjeta, un solo toque</h2>
+      <span class="price">$499 MXN</span>
+      <p>Comparte tu contacto, redes o menú con tecnología NFC. Configurala con tus <em>datos</em> (URL, teléfono, redes).</p>
+
+      <div class="btnrow">
+        <a class="cta" target="_blank"
+           href="https://wa.me/5219933420511?text=Hola%20quiero%20mi%20tarjeta%20NFC%20VariaTap">
+          <i class="fab fa-whatsapp"></i> Pedir por WhatsApp
+        </a>
+        <a class="secondary" target="_blank" rel="noopener"
+           href="https://variatap.com/ejemplo/tu-nombre">
+          Ver ejemplo
+        </a>
       </div>
 
-      <div class="panel">
-        <h2>Tu tarjeta, un solo toque ✨</h2>
-        <span class="price">$499 MXN</span>
-        <p>Comparte tu contacto, redes o menú con tecnología NFC. Se configura con tus <em>datos</em> (URL, teléfono, redes). No incluye personalización de diseño gráfico.</p>
-
-        <div class="btnrow">
-          <a class="cta" target="_blank"
-             href="https://wa.me/5219933420511?text=Hola%20quiero%20mi%20tarjeta%20NFC%20VariaTap">
-            <i class="fab fa-whatsapp"></i> Pedir por WhatsApp
-          </a>
-          <a class="secondary" target="_blank" rel="noopener"
-             href="https://variatap.com/ejemplo/tu-nombre">
-            Ver ejemplo
-          </a>
-        </div>
-
-        <ul class="bullets">
-          <li>Impresión frente y reverso</li>
-          <li>Programación NFC con tus datos</li>
-          <li>Entrega rápida</li>
-        </ul>
-
-        <div class="example">
-          Ejemplo del perfil al que te lleva la tarjeta: 
-          <a href="https://variatap.com/ejemplo/tu-nombre" target="_blank" rel="noopener">
-            variatap.com/ejemplo/tu-nombre
-          </a>
-        </div>
+      <div class="example">
+        Ejemplo del perfil al que te lleva la tarjeta:
+        <a href="https://variatap.com/ejemplo/tu-nombre" target="_blank" rel="noopener">
+          variatap.com/ejemplo/tu-nombre
+        </a>
       </div>
-    </section>
+    </div>
   </div>
 
   <footer>© 2025 VariaTap • Atención por WhatsApp</footer>
@@ -199,28 +249,66 @@
     <i class="fab fa-whatsapp" aria-hidden="true"></i>
   </a>
 
-  <!-- JS: alterna el giro con click o teclado -->
+  <!-- ======== JS: animación por scroll con SHIFT_X adaptativo ======== -->
   <script>
-    (function () {
-      const card = document.querySelector('.card3d');
-      if (!card) return;
+    (function(){
+      const section = document.querySelector('.hero-anim');
+      const card    = document.getElementById('animCard');
+      const screen  = document.getElementById('screen');
 
-      function toggleFlip() {
-        const flipped = card.classList.toggle('is-flipped');
-        card.setAttribute('aria-pressed', flipped ? 'true' : 'false');
+      let SHIFT_X = 0; // centrado por defecto (móvil)
+
+      const BEHIND_AT = 0.55; // cuando la tarjeta queda detrás del teléfono
+      const STOP_AT   = 0.56; // congelar animación al llegar
+
+      let secTop = 0, secH = 0, vh = 0;
+
+      const clamp = (v,min,max) => Math.max(min, Math.min(max, v));
+      const lerp  = (a,b,t) => a + (b-a)*t;
+
+      function updateShiftX(){
+        // En desktop ancho aplicamos el desplazamiento de 400px; en móvil/tablet se centra
+        SHIFT_X = window.innerWidth >= 1024 ? 400 : 180;
       }
 
-      card.addEventListener('click', toggleFlip);
+      function measure(){
+        const rect = section.getBoundingClientRect();
+        secTop = window.scrollY + rect.top;
+        secH = section.offsetHeight;
+        vh = window.innerHeight;
+        updateShiftX();
+      }
 
-      // Soporte teclado: Enter / Espacio
-      card.addEventListener('keydown', (e) => {
-        const isEnter = e.key === 'Enter';
-        const isSpace = e.key === ' ' || e.code === 'Space';
-        if (isEnter || isSpace) {
-          e.preventDefault();
-          toggleFlip();
+      function render(){
+        const y = window.scrollY;
+        const raw = clamp((y - secTop) / (secH - vh), 0, 1);
+        const t = Math.min(raw, STOP_AT);
+
+        const translateYvh = lerp(-28, -8, t);
+        const translateZpx = lerp(40, -160, t);
+        const rotateXdeg   = lerp(6, 0, t);
+        const scale        = lerp(1, 0.94, t);
+
+        card.style.transform =
+          `translate(calc(-50% + ${SHIFT_X}px), ${translateYvh}vh) translateZ(${translateZpx}px) rotateX(${rotateXdeg}deg) scale(${scale})`;
+
+        // Z-index: detrás del teléfono cuando supera el umbral real
+        card.style.zIndex = raw > BEHIND_AT ? 1 : 10;
+
+        // Enciende la pantalla exactamente cuando la tarjeta queda detrás
+        if(raw >= BEHIND_AT){
+          screen.classList.add('on');
+        }else{
+          screen.classList.remove('on');
         }
-      });
+
+        requestAnimationFrame(render);
+      }
+
+      window.addEventListener('resize', measure, {passive:true});
+      window.addEventListener('load', measure);
+      measure();
+      render();
     })();
   </script>
 </body>
