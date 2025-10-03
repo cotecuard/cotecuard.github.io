@@ -814,8 +814,8 @@ def serve_site_asset(slug, filename):
 
 
 # ---------- páginas de demostración ----------
-@app.route("/")
-def index():
+@app.route("/_demo")
+def index_demo():
     return """
     <h2>VariaTap • Demo</h2>
     <p>Visita un link genérico, por ejemplo: <a href="/mislug">/mislug</a></p>
@@ -876,4 +876,5 @@ def serve_uploaded_file(filename):
 if __name__ == "__main__":
     # Para desarrollo
     app.run(debug=True, port=5000)
+
 
